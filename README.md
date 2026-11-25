@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <a href="README.md">Español</a> · <a href="README.en.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
+</p>
+
+<p align="center">
   <b>Mira la red de tu app, dale una cámara, mándale notificaciones y mídela al píxel.</b><br>
   Todo desde un panel pegado al Simulador de iOS. Sin proxy, sin certificados y sin tocar tu proyecto.
 </p>

@@ -1,5 +1,5 @@
 // Draws Saguru's icon and, optionally, the banner of the README.
-//   swift scripts/make-icon.swift assets/icon_1024.png [assets/banner.png]
+//   swift scripts/make-icon.swift assets/icon_1024.png [assets/banner.png [tagline [features]]]
 // The icon is a phone with the » that unfolds Saguru's panel beside it: an 824 px tile centred on a
 // transparent 1024 px canvas, the proportions macOS expects of an app icon.
 import AppKit
@@ -89,9 +89,9 @@ if arguments.count >= 3 {
         let title = NSFont.systemFont(ofSize: 132, weight: .bold)
         let rounded = title.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: 132) } ?? title
         ("Saguru" as NSString).draw(at: CGPoint(x: 540, y: 216), withAttributes: [.font: rounded, .foregroundColor: NSColor.white, .kern: -2])
-        ("Superpoderes para el Simulador de iOS" as NSString).draw(at: CGPoint(x: 546, y: 150), withAttributes: [
+        ((arguments.count > 3 ? arguments[3] : "Superpoderes para el Simulador de iOS") as NSString).draw(at: CGPoint(x: 546, y: 150), withAttributes: [
             .font: NSFont.systemFont(ofSize: 44, weight: .medium), .foregroundColor: NSColor(white: 1, alpha: 0.72)])
-        ("Red · Cámara · Push · Permisos · Datos · Diseño" as NSString).draw(at: CGPoint(x: 548, y: 92), withAttributes: [
+        ((arguments.count > 4 ? arguments[4] : "Red · Cámara · Push · Permisos · Datos · Diseño") as NSString).draw(at: CGPoint(x: 548, y: 92), withAttributes: [
             .font: NSFont.systemFont(ofSize: 30, weight: .regular), .foregroundColor: NSColor(red: 0.44, green: 0.84, blue: 1, alpha: 0.95)])
     }
     try banner.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: arguments[2]))
