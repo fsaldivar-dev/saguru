@@ -179,19 +179,6 @@ struct ContextForm: View {
                         }
                     }
                     .labelsHidden()
-                    if !model.knowsWindowDevice {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("Saguru no puede ver a qué simulador está pegado.")
-                                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 0)
-                            Button("Permitir") {
-                                SimulatorAX.requestAccess()
-                                model.say("Activa Saguru en Accesibilidad y vuelve a abrirlo")
-                            }
-                            .controlSize(.small)
-                            .help("Con el permiso de Accesibilidad, Saguru lee el título de la ventana y elige el simulador solo")
-                        }
-                    }
                 } else {
                     Text(model.device.map { "\($0.name) · \($0.runtime)" } ?? "Ningún simulador arrancado")
                 }
@@ -207,7 +194,7 @@ struct ContextForm: View {
                         }
                     }
                 }
-                .frame(height: 252)
+                .frame(minHeight: 252, maxHeight: .infinity)
             }
             Toggle("Solo mis apps", isOn: $onlyMine)
         }
@@ -225,7 +212,6 @@ struct ContextForm: View {
         let chosen = app.bundleID == model.appID
         return Button {
             model.chooseApp(app.bundleID)
-            model.openTool = nil
         } label: {
             HStack(spacing: 12) {
                 AppBadge(app: app, size: 34)

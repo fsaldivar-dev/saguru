@@ -29,7 +29,12 @@ final class PanelModel: ObservableObject {
         didSet { if let openTool { lastTool = openTool } }
     }
     /// What the panel shows when it is unfolded again.
-    var lastTool = Tool.network
+    var lastTool = Tool.context
+
+    /// Opens the panel: on the app chooser until there is an app (and the permission it needs), then where it was left.
+    func unfold() {
+        openTool = app == nil || !SimulatorAX.trusted ? .context : lastTool
+    }
     /// Name of the button under the cursor (shown as a tooltip) and the last action's outcome.
     @Published var hint = ""
     @Published var status = ""

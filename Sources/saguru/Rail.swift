@@ -21,7 +21,7 @@ struct Chrome: ViewModifier {
     }
 }
 
-private struct RailButton: View {
+struct RailButton: View {
     @ObservedObject var model: PanelModel
     let symbol: String
     let name: String
@@ -54,7 +54,7 @@ private struct RailButton: View {
 }
 
 /// A rail button whose action is a form in a native popover.
-private struct RailPopover<Form: View>: View {
+struct RailPopover<Form: View>: View {
     @ObservedObject var model: PanelModel
     let tool: Tool
     let symbol: String
@@ -81,7 +81,7 @@ struct PopoverSurface: ViewModifier {
 }
 
 /// Top of the rail: the app everything applies to. Opens the simulator and app chooser.
-private struct ContextButton: View {
+struct ContextButton: View {
     @ObservedObject var model: PanelModel
     @State private var hovering = false
 
@@ -108,43 +108,27 @@ private struct ContextButton: View {
 struct RailView: View {
     @ObservedObject var model: PanelModel
 
+    /// Folded, Saguru is one button beside the Simulator. Everything else lives in the panel it unfolds.
     var body: some View {
-        VStack(spacing: 2) {
-            RailButton(model: model, symbol: model.openTool == nil ? "chevron.right.2" : "chevron.left.2",
-                       name: model.openTool == nil ? "Desplegar el panel" : "Plegar el panel") {
-                model.openTool = model.openTool == nil ? model.lastTool : nil
+        RailButton(model: model, symbol: "chevron.right.2", name: "Abrir Saguru") { model.unfold() }
+            .padding(5)
+            .modifier(Chrome(radius: 19))
+            .overlay {
+                if model.dropTargeted {
+                    RoundedRectangle(cornerRadius: 19, style: .continuous).strokeBorder(.tint, lineWidth: 2)
+                }
             }
-            ContextButton(model: model)
-            separator
-            RailPopover(model: model, tool: .push, symbol: "bell.badge", name: "Notificación push") { PushForm(model: model) }
-            RailPopover(model: model, tool: .gallery, symbol: "photo.on.rectangle.angled", name: "Galería") { EmptyView() }
-            RailPopover(model: model, tool: .url, symbol: "link", name: "Deep links") { URLForm(model: model) }
-            RailPopover(model: model, tool: .location, symbol: "location", name: "Ubicación") { LocationForm(model: model) }
-            RailPopover(model: model, tool: .privacy, symbol: "hand.raised", name: "Permisos") { PrivacyForm(model: model) }
-            separator
-            RailPopover(model: model, tool: .appearance, symbol: "circle.lefthalf.filled", name: "Apariencia",
-                        active: model.split == .appearance) { AppearanceForm(model: model) }
-            RailPopover(model: model, tool: .statusBar, symbol: "antenna.radiowaves.left.and.right", name: "Barra de estado",
-                        active: model.cleanBar) { StatusBarForm(model: model) }
-            RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: "Accesibilidad") { AccessibilityForm(model: model) }
-            RailPopover(model: model, tool: .data, symbol: "externaldrive", name: "Datos de la app") { DataForm(model: model) }
-            RailPopover(model: model, tool: .network, symbol: "network", name: "Red", active: model.networkOpen) { EmptyView() }
-            separator
-            RailPopover(model: model, tool: .grid, symbol: "grid", name: "Cuadrícula", active: model.gridOn) { GridForm(model: model) }
-            RailButton(model: model, symbol: "ruler", name: "Reglas", active: model.measuring) { model.toggleMeasuring() }
-            RailPopover(model: model, tool: .colors, symbol: "eyedropper", name: "Colores") { ColorsForm(model: model) }
-            separator
-            menu
-        }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 9)
-        .modifier(Chrome(radius: 21))
-        .overlay {
-            if model.dropTargeted {
-                RoundedRectangle(cornerRadius: 21, style: .continuous).strokeBorder(.tint, lineWidth: 2)
-            }
-        }
-        .onDrop(of: [.fileURL], isTargeted: $model.dropTargeted) { providers in
+            .modifier(MediaDrop(model: model))
+            .padding(1)
+    }
+}
+
+/// Dropping photos or videos adds them to the simulator's library.
+struct MediaDrop: ViewModifier {
+    @ObservedObject var model: PanelModel
+
+    func body(content: Content) -> some View {
+        content.onDrop(of: [.fileURL], isTargeted: $model.dropTargeted) { providers in
             let group = DispatchGroup()
             var urls: [URL] = []
             for provider in providers {
@@ -159,11 +143,44 @@ struct RailView: View {
             group.notify(queue: .main) { model.addMedia(urls) }
             return true
         }
-        .padding(1)
+    }
+}
+
+/// The tools, in a row along the top of the panel.
+struct ToolBar: View {
+    @ObservedObject var model: PanelModel
+
+    var body: some View {
+        HStack(spacing: 2) {
+            RailButton(model: model, symbol: "chevron.left.2", name: "Plegar") { model.openTool = nil }
+            ContextButton(model: model)
+            separator
+            RailPopover(model: model, tool: .push, symbol: "bell.badge", name: "Notificación push") { EmptyView() }
+            RailPopover(model: model, tool: .gallery, symbol: "photo.on.rectangle.angled", name: "Galería") { EmptyView() }
+            RailPopover(model: model, tool: .url, symbol: "link", name: "Deep links") { EmptyView() }
+            RailPopover(model: model, tool: .location, symbol: "location", name: "Ubicación") { EmptyView() }
+            RailPopover(model: model, tool: .privacy, symbol: "hand.raised", name: "Permisos") { EmptyView() }
+            separator
+            RailPopover(model: model, tool: .appearance, symbol: "circle.lefthalf.filled", name: "Apariencia",
+                        active: model.split == .appearance) { EmptyView() }
+            RailPopover(model: model, tool: .statusBar, symbol: "antenna.radiowaves.left.and.right", name: "Barra de estado",
+                        active: model.cleanBar) { EmptyView() }
+            RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: "Accesibilidad") { EmptyView() }
+            RailPopover(model: model, tool: .data, symbol: "externaldrive", name: "Datos de la app") { EmptyView() }
+            RailPopover(model: model, tool: .network, symbol: "network", name: "Red", active: model.networkOpen) { EmptyView() }
+            separator
+            RailPopover(model: model, tool: .grid, symbol: "grid", name: "Cuadrícula", active: model.gridOn) { EmptyView() }
+            RailButton(model: model, symbol: "ruler", name: "Reglas", active: model.measuring) { model.toggleMeasuring() }
+            RailPopover(model: model, tool: .colors, symbol: "eyedropper", name: "Colores") { EmptyView() }
+            Spacer(minLength: 8)
+            menu
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
     }
 
     private var separator: some View {
-        Rectangle().fill(.white.opacity(0.16)).frame(width: 20, height: 1).padding(.vertical, 4)
+        Rectangle().fill(.white.opacity(0.16)).frame(width: 1, height: 18).padding(.horizontal, 5)
     }
 
     private var menu: some View {
@@ -184,7 +201,7 @@ struct RailView: View {
             Image(systemName: "ellipsis")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.white.opacity(0.82))
-                .frame(width: 32, height: 24)
+                .frame(width: 32, height: 28)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)

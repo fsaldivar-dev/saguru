@@ -76,7 +76,6 @@ final class PanelController: NSObject, NSApplicationDelegate {
         backdrop.ignoresMouseEvents = true
         // Developer builds lose the Accessibility permission whenever the signature changes, so it is
         // asked for at every launch that does not have it. macOS applies it after a relaunch.
-        if !SimulatorAX.trusted { SimulatorAX.requestAccess() }
 
         model.restoreInterruptedAppearances()
         model.refreshDevices()
@@ -145,8 +144,13 @@ final class PanelController: NSObject, NSApplicationDelegate {
             floating = shouldFloat
             [rail, toast, overlay, handle, drawer].forEach { $0?.level = shouldFloat ? .floating : .normal }
         }
-        if !rail.isVisible { rail.orderFrontRegardless() }
-        if !floating, !above.contains(rail.windowNumber) { rail.order(.above, relativeTo: window.number) }
+        // Unfolded, the panel carries the tools and the button steps aside.
+        if model.openTool != nil {
+            if rail.isVisible { rail.orderOut(nil) }
+        } else {
+            if !rail.isVisible { rail.orderFrontRegardless() }
+            if !floating, !above.contains(rail.windowNumber) { rail.order(.above, relativeTo: window.number) }
+        }
         followDrawer(window, screen: screen, above: above)
         followOverlay(window, isAbove: floating || above.contains(overlay.windowNumber))
     }
@@ -154,14 +158,14 @@ final class PanelController: NSObject, NSApplicationDelegate {
     /// The docked panel sits beyond the rail, as tall as the Simulator window, and the tray goes behind all three.
     private func followDrawer(_ window: SimWindow, screen: NSScreen?, above: Set<Int>) {
         let gap: CGFloat = 6
-        var united = window.frame.union(rail.frame)
+        let railOnRight = rail.frame.minX >= window.frame.midX
+        var united = window.frame
         if model.openTool != nil {
-            let railOnRight = rail.frame.minX >= window.frame.midX
             let visible = screen?.visibleFrame ?? window.frame
-            let room = railOnRight ? visible.maxX - rail.frame.maxX - gap - 10 : rail.frame.minX - gap - 10 - visible.minX
+            let room = railOnRight ? visible.maxX - window.frame.maxX - gap - 10 : window.frame.minX - gap - 10 - visible.minX
             let width = min(drawerHost.fittingSize.width, max(room, 320))
             let height = max(window.frame.height, 360)
-            let x = railOnRight ? rail.frame.maxX + gap : rail.frame.minX - gap - width
+            let x = railOnRight ? window.frame.maxX + gap : window.frame.minX - gap - width
             let target = NSRect(x: x, y: window.frame.maxY - height, width: width, height: height)
             if drawer.frame != target { drawer.setFrame(target, display: true) }
             if model.openTool != shownTool {
@@ -173,8 +177,9 @@ final class PanelController: NSObject, NSApplicationDelegate {
             }
             if !floating, !above.contains(drawer.windowNumber) { drawer.order(.above, relativeTo: window.number) }
             united = united.union(target)
-        } else if drawer.isVisible {
-            drawer.orderOut(nil)
+        } else {
+            if drawer.isVisible { drawer.orderOut(nil) }
+            united = united.union(rail.frame)
         }
         let changed = model.openTool != shownTool
         shownTool = model.openTool
@@ -234,7 +239,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
     /// The capsule beside the rail: the outcome of the last action, or the name of the hovered button.
     private func updateToast() {
         let text = model.status.isEmpty ? model.hint : model.status
-        guard rail.isVisible, !text.isEmpty else {
+        guard rail.isVisible || drawer.isVisible, !text.isEmpty else {
             if toast.isVisible { toast.orderOut(nil) }
             toastText = ""
             return
@@ -243,12 +248,19 @@ final class PanelController: NSObject, NSApplicationDelegate {
             toastText = text
             toastHost.rootView = ToastView(text: text)
         }
-        // Beside the rail, on the side away from the Simulator, level with the cursor.
         let size = toastHost.fittingSize
-        let onRight = rail.frame.minX >= (sim?.frame.midX ?? 0)
-        let x = onRight ? rail.frame.maxX + 6 : rail.frame.minX - 6 - size.width
-        let y = min(max(NSEvent.mouseLocation.y, rail.frame.minY + 14), rail.frame.maxY - 14) - size.height / 2
-        let frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+        let mouse = NSEvent.mouseLocation
+        let frame: NSRect
+        if drawer.isVisible {
+            // Under the row of tools, below the cursor.
+            let x = min(max(mouse.x - size.width / 2, drawer.frame.minX + 8), drawer.frame.maxX - size.width - 8)
+            frame = NSRect(x: x, y: drawer.frame.maxY - 46 - size.height, width: size.width, height: size.height)
+        } else {
+            // Beside the button, on the side away from the Simulator.
+            let onRight = rail.frame.minX >= (sim?.frame.midX ?? 0)
+            let x = onRight ? rail.frame.maxX + 6 : rail.frame.minX - 6 - size.width
+            frame = NSRect(x: x, y: rail.frame.midY - size.height / 2, width: size.width, height: size.height)
+        }
         if toast.frame != frame { toast.setFrame(frame, display: true) }
         if !toast.isVisible { toast.orderFrontRegardless() }
     }

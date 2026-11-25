@@ -16,10 +16,11 @@ Crea `build/Saguru.app` y enlaza el comando `saguru` en `/usr/local/bin` o `~/.l
 saguru
 ```
 
-Aparece una columna a la derecha del Simulador, sobre un marco que los une. Lo sigue al moverlo y se oculta cuando el Simulador no está a la vista. Cada herramienta se abre en un **panel acoplado** a continuación de la columna, tan alto como el Simulador; `»` lo despliega con la última herramienta y `«` lo pliega. La red también puede soltarse a una ventana aparte. No tiene icono en el Dock; se cierra con `saguru quit` o desde su menú `…`.
+Junto al Simulador aparece un botón `»`, sobre un marco que lo rodea. Lo sigue al moverlo y se oculta cuando el Simulador no está a la vista. No tiene icono en el Dock; se cierra con `saguru quit` o desde el menú `…` del panel.
 
-Arriba de la columna está la **app activa**: se elige una vez (simulador y app, con buscador) y vale para todo lo
-que depende de una app: notificaciones, permisos y datos. Se recuerda por simulador.
+`»` despliega un **panel acoplado**, tan alto como el Simulador, con las herramientas en una fila arriba; `«` lo pliega. La red también puede soltarse a una ventana aparte.
+
+El panel se abre en el **inicio**: si falta el permiso de Accesibilidad lo pide ahí, y es donde se elige la **app activa** (simulador y app, con buscador), que vale para todo lo que depende de una app: notificaciones, permisos, datos y red. Se recuerda por simulador. Al lado muestra su ficha: versión, número de compilación, iOS mínimo, cuándo se compiló, SDK, tamaño y esquemas de URL.
 
 | Grupo | Botón | Qué hace |
 |---|---|---|
@@ -104,7 +105,7 @@ sonido, `thread-id`, datos propios.
   que «se leería» se deducen del árbol. El contraste de la auditoría es una estimación sobre una captura.
 - Los ajustes de accesibilidad que `simctl` no cubre se escriben en las preferencias del simulador. Falta la
   escala de grises: no se pudo confirmar que surta efecto.
-- Saguru pide el permiso de Accesibilidad al arrancar si no lo tiene; macOS lo aplica tras relanzar. `scripts/build.sh`
+- Saguru pide el permiso de Accesibilidad en el inicio del panel si no lo tiene; macOS lo aplica tras relanzar. `scripts/build.sh`
   firma con tu certificado «Apple Development» si existe, y así el permiso sobrevive a las recompilaciones; sin
   certificado la firma es local y macOS lo vuelve a pedir tras cada build.
 - El monitor de red solo ve lo que pasa por `URLSession` (también Alamofire y similares). No ve gRPC (Firestore),
