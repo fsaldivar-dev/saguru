@@ -67,7 +67,49 @@ private struct RailPopover<Form: View>: View {
         .popover(isPresented: Binding(get: { model.openTool == tool },
                                       set: { if !$0, model.openTool == tool { model.openTool = nil } }),
                  arrowEdge: .trailing) {
-            form()
+            form().modifier(PopoverSurface())
+        }
+    }
+}
+
+/// Popovers are solid: over the desktop a translucent one lets the wallpaper through and text gets hard to read.
+struct PopoverSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .presentationBackground(Color(red: 0.13, green: 0.13, blue: 0.145))
+            // An accessory app is rarely "active", and macOS greys the accent of inactive apps.
+            .tint(Color(nsColor: .systemBlue))
+            .environment(\.colorScheme, .dark)
+    }
+}
+
+/// Top of the rail: the app everything applies to. Opens the simulator and app chooser.
+private struct ContextButton: View {
+    @ObservedObject var model: PanelModel
+    @State private var hovering = false
+
+    var body: some View {
+        Button {
+            NSApp.activate(ignoringOtherApps: true)
+            model.openTool = model.openTool == .context ? nil : .context
+        } label: {
+            AppBadge(app: model.app, size: 26)
+                .frame(width: 32, height: 32)
+                .background(.white.opacity(hovering || model.openTool == .context ? 0.14 : 0),
+                            in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("App y simulador")
+        .onHover { inside in
+            hovering = inside
+            let name = model.app?.name ?? "Elegir app"
+            if inside { model.hint = name } else if model.hint == name { model.hint = "" }
+        }
+        .popover(isPresented: Binding(get: { model.openTool == .context },
+                                      set: { if !$0, model.openTool == .context { model.openTool = nil } }),
+                 arrowEdge: .trailing) {
+            ContextForm(model: model).modifier(PopoverSurface())
         }
     }
 }
@@ -77,6 +119,8 @@ struct RailView: View {
 
     var body: some View {
         VStack(spacing: 2) {
+            ContextButton(model: model)
+            separator
             RailPopover(model: model, tool: .push, symbol: "bell.badge", name: "Notificación push") { PushForm(model: model) }
             RailButton(model: model, symbol: "photo.badge.plus", name: "Añadir fotos y videos") { model.pickMedia() }
             RailPopover(model: model, tool: .url, symbol: "link", name: "Abrir URL") { URLForm(model: model) }

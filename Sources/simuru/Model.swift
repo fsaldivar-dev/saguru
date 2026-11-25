@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Tool: String {
-    case push, url, location, privacy, accessibility, data, overlay, grid
+    case context, push, url, location, privacy, accessibility, data, overlay, grid
 }
 
 struct DefaultsEntry: Identifiable, Hashable {
@@ -19,6 +19,11 @@ final class PanelModel: ObservableObject {
     @Published var devices: [SimDevice] = []
     @Published var selected: String?
     @Published var apps: [SimApp] = []
+    /// The app every app-specific action (push, permissions, app data) applies to. Chosen once, in the
+    /// context popover, and remembered per simulator.
+    @Published var appID = ""
+    /// Whether iOS will show a notification sent to `appID`.
+    @Published var pushPermission = Simctl.NotificationPermission.unknown
     /// Popover currently open, if any.
     @Published var openTool: Tool?
     /// Name of the button under the cursor (shown as a tooltip) and the last action's outcome.
@@ -26,6 +31,8 @@ final class PanelModel: ObservableObject {
     @Published var status = ""
     @Published var cleanBar = false
     @Published var dropTargeted = false
+    /// Whether macOS lets Simuru see which simulator its window shows (needs Accessibility).
+    @Published var knowsWindowDevice = false
 
     // Accessibility
     @Published var contentSize = "large"
@@ -49,6 +56,27 @@ final class PanelModel: ObservableObject {
     private let work = DispatchQueue(label: "simuru.work")
 
     var device: SimDevice? { devices.first { $0.udid == selected } }
+    var app: SimApp? { apps.first { $0.bundleID == appID } }
+    /// "SajaruBox en iPhone 17": where an app-specific action is about to land.
+    var target: String {
+        guard let device else { return "Ningún simulador arrancado" }
+        return app.map { "\($0.name) en \(device.name)" } ?? "Elige una app · \(device.name)"
+    }
+
+    func chooseApp(_ bundleID: String) {
+        appID = bundleID
+        if let selected { UserDefaults.standard.set(bundleID, forKey: "app.\(selected)") }
+        refreshPushPermission()
+    }
+
+    func refreshPushPermission() {
+        guard let udid = selected, !appID.isEmpty else { pushPermission = .unknown; return }
+        let bundleID = appID
+        DispatchQueue.global(qos: .userInitiated).async {
+            let permission = Simctl.notificationPermission(udid, bundleID: bundleID)
+            DispatchQueue.main.async { if bundleID == self.appID { self.pushPermission = permission } }
+        }
+    }
     var needsOverlay: Bool { (overlayImage != nil && overlayVisible) || gridOn || measuring }
 
     // MARK: Devices
@@ -85,7 +113,15 @@ final class PanelModel: ObservableObject {
         guard let udid = selected else { apps = []; return }
         DispatchQueue.global(qos: .userInitiated).async {
             let apps = Simctl.apps(udid)
-            DispatchQueue.main.async { if udid == self.selected { self.apps = apps } }
+            DispatchQueue.main.async {
+                guard udid == self.selected else { return }
+                if apps != self.apps { self.apps = apps }
+                // Keep the remembered app for this simulator; otherwise start on the first app of the user's.
+                let remembered = UserDefaults.standard.string(forKey: "app.\(udid)") ?? self.appID
+                let valid = apps.contains { $0.bundleID == remembered } ? remembered : (apps.first?.bundleID ?? "")
+                if valid != self.appID { self.appID = valid }
+                self.refreshPushPermission()
+            }
         }
     }
 
@@ -95,7 +131,8 @@ final class PanelModel: ObservableObject {
         status = message
         statusToken += 1
         let token = statusToken
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        // Long messages (warnings) stay long enough to be read.
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(2.5, Double(message.count) * 0.06)) {
             if token == self.statusToken { self.status = "" }
         }
     }
@@ -118,9 +155,20 @@ final class PanelModel: ObservableObject {
 
     // MARK: Inject
 
-    func sendPush(bundleID: String, title: String, body: String, badge: Int?) {
-        perform("Notificación enviada") { device in
-            try Simctl.push(device.udid, bundleID: bundleID, payload: Simctl.pushPayload(title: title, body: body, badge: badge))
+    func sendPush(payload: Data) {
+        guard let device else { return say("No hay ningún simulador arrancado") }
+        let bundleID = appID
+        guard !bundleID.isEmpty else { return say("Elige una app primero") }
+        work.async {
+            let message: String
+            do {
+                let permission = try Simctl.push(device.udid, bundleID: bundleID, payload: payload)
+                // Sent, but iOS drops it without notification permission: say so instead of "sent".
+                message = permission.warning.map { "No se verá: \($0)" } ?? "Notificación enviada a \(device.name)"
+            } catch {
+                message = "\(error)"
+            }
+            DispatchQueue.main.async { self.say(message) }
         }
     }
 

@@ -11,6 +11,9 @@ private func makePanel<Content: View>(_ view: Content) -> (NSPanel, NSHostingVie
     panel.hasShadow = false
     panel.hidesOnDeactivate = false
     panel.isMovable = false
+    // A window stays on the desktop (Space) where it was first shown. The Simulator may be on any of them,
+    // or be moved, so these panels exist on all desktops and are simply hidden where it is not in view.
+    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     panel.contentView = hosting
     return (panel, hosting)
 }
@@ -34,6 +37,8 @@ final class PanelController: NSObject, NSApplicationDelegate {
 
     private struct SimWindow: Equatable {
         let number: Int
+        /// Device name as the window server reports it ("iPhone 17"); empty if macOS withholds it.
+        var title = ""
         /// Top-left origin (what the window server and Accessibility use).
         let topLeft: CGRect
         /// Bottom-left origin (what AppKit uses).
@@ -78,6 +83,16 @@ final class PanelController: NSObject, NSApplicationDelegate {
         let (window, above) = found
         if sim == nil { model.refreshDevices() }
         if window != sim {
+            // With several simulators open, the panel acts on the one it is attached to. macOS only tells
+            // which simulator a window shows to apps with Accessibility (or Screen Recording) permission.
+            if window.number != sim?.number {
+                if !window.title.isEmpty {
+                    model.select(windowTitle: window.title)
+                } else if let title = SimulatorAX.window(at: window.topLeft)?.title {
+                    model.select(windowTitle: title)
+                }
+                model.knowsWindowDevice = !window.title.isEmpty || SimulatorAX.trusted
+            }
             if window.topLeft.size != sim?.topLeft.size { screenOffset = nil }
             sim = window
             lastChange = Date()
@@ -177,7 +192,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
                let bounds = window[kCGWindowBounds as String] as? [String: CGFloat],
                let w = bounds["Width"], let h = bounds["Height"], let x = bounds["X"], let y = bounds["Y"], h > 200,
                NSScreen.screens.contains(where: { $0.frame.intersects(CGRect(x: x, y: primaryHeight - y - h, width: w, height: h)) }) {
-                let sim = SimWindow(number: number, topLeft: CGRect(x: x, y: y, width: w, height: h),
+                let sim = SimWindow(number: number, title: window[kCGWindowName as String] as? String ?? "", topLeft: CGRect(x: x, y: y, width: w, height: h),
                                     frame: CGRect(x: x, y: primaryHeight - y - h, width: w, height: h))
                 return (sim, above)
             }

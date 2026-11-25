@@ -1,66 +1,367 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// Shared layout for every popover: a title and a narrow column of controls.
+// MARK: - Shared pieces
+
+/// Icons of the apps installed in a simulator, read from their bundles on this Mac.
+enum AppIcons {
+    private static let cache = NSCache<NSString, NSImage>()
+
+    static func icon(for app: SimApp) -> NSImage? {
+        guard let path = app.path else { return nil }
+        if let cached = cache.object(forKey: path as NSString) { return cached }
+        // Xcode leaves "AppIcon60x60@2x.png" (or the name the app chose) next to the binary.
+        let bundle = URL(fileURLWithPath: path)
+        let info = NSDictionary(contentsOf: bundle.appendingPathComponent("Info.plist"))
+        let primary = (info?["CFBundleIcons"] as? [String: Any])?["CFBundlePrimaryIcon"] as? [String: Any]
+        var names = (primary?["CFBundleIconFiles"] as? [String])?.reversed().map { "\($0)@2x.png" } ?? []
+        names.append("AppIcon60x60@2x.png")
+        guard let image = names.lazy.compactMap({ NSImage(contentsOf: bundle.appendingPathComponent($0)) }).first
+        else { return nil }
+        cache.setObject(image, forKey: path as NSString)
+        return image
+    }
+}
+
+/// An app's icon, or its initials on a tile when it has none.
+struct AppBadge: View {
+    let app: SimApp?
+    var size: CGFloat = 32
+
+    var body: some View {
+        Group {
+            if let app, let icon = AppIcons.icon(for: app) {
+                Image(nsImage: icon).resizable().interpolation(.high)
+            } else {
+                RoundedRectangle(cornerRadius: size * 0.24, style: .continuous).fill(.white.opacity(0.12))
+                    .overlay {
+                        if let app {
+                            Text(String(app.name.prefix(2))).font(.system(size: size * 0.38, weight: .semibold))
+                        } else {
+                            Image(systemName: "app.dashed").font(.system(size: size * 0.5))
+                        }
+                    }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
+    }
+}
+
+/// Shared layout for every popover. `roomy` forms have a header with the target and labels above fields.
 private struct FormBox<Content: View>: View {
     let title: String
+    /// Simulator the action applies to, shown so it is never a guess when several are open.
+    var device: String?
     var width: CGFloat = 264
+    /// When set, the header shows the app and simulator the form acts on.
+    var target: PanelModel?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(.headline)
+        VStack(alignment: .leading, spacing: target == nil ? 10 : 16) {
+            if let target {
+                HStack(spacing: 12) {
+                    AppBadge(app: target.app, size: 36)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.title3.weight(.semibold))
+                        Text(target.target).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.headline)
+                    if let device { Text(device).font(.caption).foregroundStyle(.secondary) }
+                }
+            }
             content()
         }
         .textFieldStyle(.roundedBorder)
         .toggleStyle(.switch)
-        .controlSize(.small)
-        .padding(14)
+        .controlSize(target == nil ? .small : .regular)
+        .padding(target == nil ? 14 : 20)
         .frame(width: width, alignment: .leading)
     }
 }
 
-private struct AppPicker: View {
-    @ObservedObject var model: PanelModel
-    @Binding var bundleID: String
+/// A field with its name above it, so the name stays visible while typing.
+private struct Labeled<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: () -> Content
 
-    var body: some View {
-        Picker("App", selection: $bundleID) {
-            if model.apps.isEmpty { Text("Sin apps").tag("") }
-            ForEach(model.apps) { app in
-                Text(app.isUser ? app.name : "\(app.name) (sistema)").tag(app.bundleID)
-            }
-        }
-        .onAppear(perform: fix)
-        .onChange(of: model.apps) { fix() }
+    init(_ label: String, @ViewBuilder content: @escaping () -> Content) {
+        self.label = label
+        self.content = content
     }
 
-    /// Falls back to the first (user) app when the remembered one is not installed on this simulator.
-    private func fix() {
-        if !model.apps.contains(where: { $0.bundleID == bundleID }) { bundleID = model.apps.first?.bundleID ?? "" }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label).font(.callout).foregroundStyle(.secondary)
+            content()
+        }
+    }
+}
+
+// MARK: - Context: simulator and app, chosen once
+
+struct ContextForm: View {
+    @ObservedObject var model: PanelModel
+    @AppStorage("context.onlyMine") private var onlyMine = true
+    @State private var search = ""
+    @FocusState private var searching: Bool
+
+    private var apps: [SimApp] {
+        let needle = search.trimmingCharacters(in: .whitespaces)
+        return model.apps.filter { app in
+            (!onlyMine || app.isUser || app.bundleID == model.appID)
+                && (needle.isEmpty || app.name.localizedCaseInsensitiveContains(needle)
+                    || app.bundleID.localizedCaseInsensitiveContains(needle))
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Labeled("Simulador") {
+                if model.devices.count > 1 {
+                    Picker("", selection: Binding(get: { model.selected ?? "" }, set: { model.select($0) })) {
+                        ForEach(model.devices) { device in
+                            Text("\(device.name) · \(device.runtime)").tag(device.udid)
+                        }
+                    }
+                    .labelsHidden()
+                    if !model.knowsWindowDevice {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("Simuru no puede ver a qué simulador está pegado.")
+                                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                            Button("Permitir") {
+                                SimulatorAX.requestAccess()
+                                model.say("Activa Simuru en Accesibilidad y vuelve a abrirlo")
+                            }
+                            .controlSize(.small)
+                            .help("Con el permiso de Accesibilidad, Simuru lee el título de la ventana y elige el simulador solo")
+                        }
+                    }
+                } else {
+                    Text(model.device.map { "\($0.name) · \($0.runtime)" } ?? "Ningún simulador arrancado")
+                }
+            }
+            Labeled("App") {
+                TextField("Buscar app", text: $search).focused($searching)
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(apps) { app in row(app) }
+                        if apps.isEmpty {
+                            Text(model.apps.isEmpty ? "Este simulador no tiene apps" : "Sin resultados")
+                                .font(.callout).foregroundStyle(.secondary).padding(.vertical, 20)
+                        }
+                    }
+                }
+                .frame(height: 252)
+            }
+            Toggle("Solo mis apps", isOn: $onlyMine)
+        }
+        .textFieldStyle(.roundedBorder)
+        .toggleStyle(.switch)
+        .padding(20)
+        .frame(width: 360, alignment: .leading)
+        .onAppear {
+            model.reloadApps()
+            searching = true
+        }
+    }
+
+    private func row(_ app: SimApp) -> some View {
+        let chosen = app.bundleID == model.appID
+        return Button {
+            model.chooseApp(app.bundleID)
+            model.openTool = nil
+        } label: {
+            HStack(spacing: 12) {
+                AppBadge(app: app, size: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(app.name).font(.body).lineLimit(1)
+                    Text(app.isUser ? app.bundleID : "\(app.bundleID) · sistema")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+                if chosen { Image(systemName: "checkmark").foregroundStyle(Color(nsColor: .systemBlue)) }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(chosen ? AnyShapeStyle(Color(nsColor: .systemBlue).opacity(0.22)) : AnyShapeStyle(.clear),
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Push
+
+/// One extra field of the payload, next to "aps".
+private struct PushDatum: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var key = ""
+    var value = ""
+
+    /// "42" is sent as a number and "true" as a boolean; anything else as text.
+    /// The JSON view is there for the cases where that guess is wrong.
+    var typed: Any {
+        let text = value.trimmingCharacters(in: .whitespaces)
+        if text == "true" { return true }
+        if text == "false" { return false }
+        if let integer = Int(text) { return integer }
+        if let number = Double(text), text.contains(".") { return number }
+        return value
     }
 }
 
 struct PushForm: View {
     @ObservedObject var model: PanelModel
-    @AppStorage("app") private var bundleID = ""
     @AppStorage("push.title") private var title = "Hola"
+    @AppStorage("push.subtitle") private var subtitle = ""
     @AppStorage("push.body") private var message = "Notificación de prueba"
     @AppStorage("push.badge") private var badge = ""
+    @AppStorage("push.sound") private var sound = true
+    @AppStorage("push.data") private var storedData = "[]"
+    @State private var data: [PushDatum] = []
+    @State private var showJSON = false
+    @State private var json = ""
+
+    private var formPayload: Data {
+        Simctl.pushPayload(title: title, subtitle: subtitle, body: message, badge: Int(badge), sound: sound,
+                           data: data.map { ($0.key.trimmingCharacters(in: .whitespaces), $0.typed) })
+    }
+
+    private var jsonIsValid: Bool {
+        (try? JSONSerialization.jsonObject(with: Data(plainQuotes(json).utf8))) is [String: Any]
+    }
+
+    /// macOS turns typed quotes into curly ones in text editors, which is not JSON.
+    private func plainQuotes(_ text: String) -> String {
+        text.replacingOccurrences(of: "\u{201C}", with: "\"").replacingOccurrences(of: "\u{201D}", with: "\"")
+            .replacingOccurrences(of: "\u{2018}", with: "'").replacingOccurrences(of: "\u{2019}", with: "'")
+    }
 
     var body: some View {
-        FormBox(title: "Notificación push") {
-            AppPicker(model: model, bundleID: $bundleID)
-            TextField("Título", text: $title)
-            TextField("Texto", text: $message)
-            TextField("Badge (opcional)", text: $badge)
+        FormBox(title: "Notificación push", width: 400, target: model) {
+            if showJSON { jsonEditor } else { fields }
+            permission
             HStack {
+                Button(showJSON ? "Ver formulario" : "Ver JSON") {
+                    if !showJSON { json = String(decoding: formPayload, as: UTF8.self) }
+                    showJSON.toggle()
+                }
+                if showJSON { Button("Abrir .apns…") { openFile() } }
                 Spacer()
-                Button("Enviar") { model.sendPush(bundleID: bundleID, title: title, body: message, badge: Int(badge)) }
+                Button("Enviar") { model.sendPush(payload: showJSON ? Data(plainQuotes(json).utf8) : formPayload) }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(bundleID.isEmpty)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.appID.isEmpty || (showJSON && !jsonIsValid))
             }
         }
-        .onAppear { model.reloadApps() }
+        .onAppear {
+            badge = badge.filter(\.isNumber)
+            data = (try? JSONDecoder().decode([PushDatum].self, from: Data(storedData.utf8))) ?? []
+            model.reloadApps()
+        }
+        .onChange(of: data) {
+            storedData = (try? JSONEncoder().encode(data)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
+        }
+    }
+
+    @ViewBuilder
+    private var fields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Labeled("Título") { TextField("", text: $title) }
+            Labeled("Subtítulo") { TextField("Opcional", text: $subtitle) }
+            Labeled("Texto") { TextField("", text: $message, axis: .vertical).lineLimit(2...4) }
+        }
+        Divider()
+        HStack {
+            Text("Badge")
+            TextField("", text: $badge)
+                .frame(width: 64)
+                .onChange(of: badge) { badge = badge.filter(\.isNumber) }
+            Spacer()
+            Toggle("Sonido", isOn: $sound)
+        }
+        Divider()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Datos para la app").font(.headline)
+                Spacer()
+                Button {
+                    data.append(PushDatum())
+                } label: {
+                    Label("Añadir", systemImage: "plus")
+                }
+                .controlSize(.small)
+            }
+            if data.isEmpty {
+                Text("Campos propios del payload, como un identificador o un deep link.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach($data) { $datum in
+                HStack(spacing: 8) {
+                    TextField("clave", text: $datum.key).frame(width: 120)
+                    TextField("valor", text: $datum.value)
+                    Button {
+                        data.removeAll { $0.id == datum.id }
+                    } label: {
+                        Image(systemName: "minus.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Quitar \(datum.key)")
+                }
+            }
+        }
+    }
+
+    private var jsonEditor: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextEditor(text: $json)
+                .font(.system(size: 12, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .frame(height: 260)
+            if !jsonIsValid {
+                Label("El JSON no es válido", systemImage: "exclamationmark.triangle")
+                    .font(.callout).foregroundStyle(Color(nsColor: .systemOrange))
+            }
+        }
+    }
+
+    /// Says before sending whether iOS will show it, instead of finding out afterwards.
+    @ViewBuilder
+    private var permission: some View {
+        switch model.pushPermission {
+        case .allowed:
+            Label("La app tiene permiso de notificaciones", systemImage: "checkmark.circle")
+                .font(.callout).foregroundStyle(Color(nsColor: .systemGreen))
+        case .denied, .neverAsked:
+            Label(model.pushPermission == .denied
+                    ? "La app tiene las notificaciones denegadas: iOS no la mostrará."
+                    : "La app aún no ha pedido permiso de notificaciones: iOS no la mostrará.",
+                  systemImage: "exclamationmark.triangle")
+                .font(.callout).foregroundStyle(Color(nsColor: .systemOrange))
+                .fixedSize(horizontal: false, vertical: true)
+        case .unknown:
+            EmptyView()
+        }
+    }
+
+    private func openFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json, UTType(filenameExtension: "apns") ?? .json]
+        panel.begin { response in
+            guard response == .OK, let url = panel.url, let text = try? String(contentsOf: url, encoding: .utf8) else { return }
+            json = text
+        }
     }
 }
 
@@ -117,12 +418,11 @@ struct LocationForm: View {
 
 struct PrivacyForm: View {
     @ObservedObject var model: PanelModel
-    @AppStorage("app") private var bundleID = ""
     @AppStorage("privacy.service") private var service = "photos"
+    private var bundleID: String { model.appID }
 
     var body: some View {
-        FormBox(title: "Permisos") {
-            AppPicker(model: model, bundleID: $bundleID)
+        FormBox(title: "Permisos", width: 340, target: model) {
             Picker("Permiso", selection: $service) {
                 ForEach(Simctl.privacyServices, id: \.self) { Text($0 == "all" ? "Todos" : $0).tag($0) }
             }
@@ -165,7 +465,7 @@ struct AccessibilityForm: View {
 
 struct DataForm: View {
     @ObservedObject var model: PanelModel
-    @AppStorage("app") private var bundleID = ""
+    private var bundleID: String { model.appID }
     @AppStorage("data.language") private var language = ""
     @AppStorage("data.region") private var region = ""
     @State private var search = ""
@@ -175,8 +475,7 @@ struct DataForm: View {
     }
 
     var body: some View {
-        FormBox(title: "Datos de la app", width: 340) {
-            AppPicker(model: model, bundleID: $bundleID)
+        FormBox(title: "Datos de la app", width: 380, target: model) {
             HStack {
                 Button("Abrir carpeta") { model.openDataFolder(bundleID: bundleID) }
                 Spacer()
@@ -212,7 +511,7 @@ struct DataForm: View {
             model.reloadApps()
             model.loadDefaults(bundleID: bundleID)
         }
-        .onChange(of: bundleID) { model.loadDefaults(bundleID: bundleID) }
+        .onChange(of: model.appID) { model.loadDefaults(bundleID: model.appID) }
     }
 }
 

@@ -82,10 +82,20 @@ let command = arguments.isEmpty ? "panel" : arguments.removeFirst()
 
 func device() -> SimDevice {
     let booted = Simctl.booted()
-    let matches = booted.filter { d in deviceFilter.map(d.matches) ?? true }
+    var matches = booted.filter { d in deviceFilter.map(d.matches) ?? true }
+    // "iPhone 17" also matches "iPhone 17 Pro": an exact name or UDID wins.
+    if let filter = deviceFilter?.lowercased(),
+       let exact = matches.first(where: { $0.name.lowercased() == filter || $0.udid.lowercased() == filter }) {
+        matches = [exact]
+    }
     guard let first = matches.first else {
         fail(booted.isEmpty ? "no hay ningún simulador arrancado (prueba: open -a Simulator)"
                             : "ningún simulador coincide con «\(deviceFilter ?? "")»")
+    }
+    // Never guess which simulator was meant: acting on the wrong one goes unnoticed.
+    guard matches.count == 1 else {
+        let list = matches.map { "  \($0.name) (\($0.runtime))" }.joined(separator: "\n")
+        fail("hay \(matches.count) simuladores arrancados; elige uno con -d:\n\(list)")
     }
     return first
 }
@@ -130,7 +140,16 @@ case "push":
         }
         payload = data
     }
-    attempt("Notificación enviada a \(bundleID)") { try Simctl.push(device().udid, bundleID: bundleID, payload: payload) }
+    let target = device()
+    do {
+        let permission = try Simctl.push(target.udid, bundleID: bundleID, payload: payload)
+        print("Notificación enviada a \(bundleID) en \(target.name)")
+        if let warning = permission.warning {
+            FileHandle.standardError.write(Data("simuru: aviso: \(warning)\n".utf8))
+        }
+    } catch {
+        fail("\(error)")
+    }
 
 case "media":
     let files = arguments.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
