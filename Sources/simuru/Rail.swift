@@ -229,3 +229,19 @@ struct ToastView: View {
             .fixedSize()
     }
 }
+
+/// The main button of a form. Drawn by hand: in a popover of an app that is not the active one, the system's
+/// prominent style paints its blue background but leaves the title out.
+struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.medium))
+            .foregroundStyle(.white.opacity(enabled ? 1 : 0.5))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 5)
+            .background(Color(nsColor: .systemBlue).opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.35),
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+}

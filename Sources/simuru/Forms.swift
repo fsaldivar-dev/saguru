@@ -102,7 +102,7 @@ struct FormBox<Content: View>: View {
 }
 
 /// A field with its name above it, so the name stays visible while typing.
-private struct Labeled<Content: View>: View {
+struct Labeled<Content: View>: View {
     let label: String
     @ViewBuilder let content: () -> Content
 
@@ -307,7 +307,7 @@ struct PushForm: View {
                 Spacer()
                 Button("Enviar") { model.sendPush(payload: showJSON ? Data(plainQuotes(json).utf8) : formPayload) }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(model.appID.isEmpty || (showJSON && !jsonIsValid))
             }
         }
@@ -456,7 +456,7 @@ struct URLForm: View {
                 Spacer()
                 Button("Abrir") { model.openURL(url) }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(trimmed.isEmpty)
             }
         }
@@ -601,7 +601,7 @@ struct LocationForm: View {
                     if let point { model.setLocation(latitude: point.latitude, longitude: point.longitude) }
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(point == nil || model.device == nil)
             }
         }
@@ -644,30 +644,6 @@ struct LocationForm: View {
             results = Array((response?.mapItems ?? []).prefix(4))
             nothingFound = results.isEmpty
         }
-    }
-}
-
-struct AccessibilityForm: View {
-    @ObservedObject var model: PanelModel
-
-    private var index: Binding<Double> {
-        Binding(get: { Double(Simctl.contentSizes.firstIndex(of: model.contentSize) ?? 3) },
-                set: { model.setContentSize(Simctl.contentSizes[Int($0.rounded())]) })
-    }
-
-    var body: some View {
-        FormBox(title: "Accesibilidad") {
-            Text("Tamaño de texto").font(.subheadline).foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                Image(systemName: "textformat.size.smaller")
-                Slider(value: index, in: 0...Double(Simctl.contentSizes.count - 1), step: 1)
-                Image(systemName: "textformat.size.larger")
-            }
-            Text(model.contentSize).font(.caption).foregroundStyle(.secondary)
-            Toggle("Aumentar contraste", isOn: Binding(get: { model.increaseContrast },
-                                                       set: { model.setIncreaseContrast($0) }))
-        }
-        .onAppear { model.loadAccessibility() }
     }
 }
 

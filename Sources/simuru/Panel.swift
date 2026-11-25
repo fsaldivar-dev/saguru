@@ -88,6 +88,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
             return
         }
         let (window, above) = found
+        model.simulatorWindow = window.topLeft
         if sim == nil { model.refreshDevices() }
         if window != sim {
             // With several simulators open, the panel acts on the one it is attached to. macOS only tells

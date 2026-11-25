@@ -92,6 +92,25 @@ struct OverlayView: View {
                 if model.measuring {
                     rulers(size: geo.size, scale: scale)
                 }
+                ForEach(model.axMarks) { mark in
+                    let rect = CGRect(x: mark.rect.minX * geo.size.width, y: mark.rect.minY * geo.size.height,
+                                      width: mark.rect.width * geo.size.width, height: mark.rect.height * geo.size.height)
+                    let color = mark.warning ? Color(nsColor: .systemOrange) : Color(nsColor: .systemBlue)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color.opacity(mark.strong ? 0.22 : 0))
+                        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(color.opacity(mark.strong ? 1 : 0.7), lineWidth: mark.strong ? 2.5 : 1))
+                        .frame(width: max(rect.width, 2), height: max(rect.height, 2))
+                        .offset(x: rect.minX, y: rect.minY)
+                    if let number = mark.number {
+                        Text("\(number)")
+                            .font(.system(size: 10, weight: .bold).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(color, in: Capsule())
+                            .fixedSize()
+                            .offset(x: rect.minX + 2, y: rect.minY + 2)
+                    }
+                }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius(geo.size), style: .continuous))

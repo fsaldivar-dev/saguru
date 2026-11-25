@@ -80,7 +80,13 @@ final class PanelModel: ObservableObject {
             DispatchQueue.main.async { if bundleID == self.appID { self.pushPermission = permission } }
         }
     }
-    var needsOverlay: Bool { (overlayImage != nil && overlayVisible) || gridOn || measuring || split != nil }
+    var needsOverlay: Bool { (overlayImage != nil && overlayVisible) || gridOn || measuring || split != nil || !axMarks.isEmpty }
+
+    /// Accessibility inspector: its state, the rectangles it draws over the screen, and where the
+    /// Simulator window is (top-left coordinates), which the panel controller keeps up to date.
+    private(set) lazy var inspector = InspectorModel(panel: self)
+    @Published var axMarks: [AXMark] = []
+    var simulatorWindow: CGRect?
 
     // Split view: a picture over one side of the screen, with a divider to drag.
     enum Split { case appearance, design }
@@ -533,11 +539,35 @@ final class PanelModel: ObservableObject {
         }
     }
 
+    /// The Simulator's Debug › Slow Animations.
+    @Published var slowAnimations = SlowAnimations.isOn
+
+    func setSlowAnimations(_ on: Bool) {
+        guard requireAccessibility() else { return }
+        slowAnimations = on
+        SlowAnimations.set(on) { worked in
+            self.slowAnimations = SlowAnimations.isOn
+            self.say(worked ? (on ? "Animaciones lentas" : "Animaciones a velocidad normal")
+                            : "No se pudo cambiar: la ventana del Simulador tiene que estar a la vista")
+        }
+    }
+
+    /// The simulator's accessibility switches (see `AXSetting`), by preference key.
+    @Published var axSettings: [String: Bool] = [:]
+
+    func setAccessibility(_ setting: AXSetting, on: Bool) {
+        axSettings[setting.key] = on
+        perform("\(setting.name): \(on ? "activado" : "desactivado")") { try Simctl.setAccessibility($0.udid, setting, on: on) }
+    }
+
     func loadAccessibility() {
         guard let udid = selected else { return }
         DispatchQueue.global(qos: .userInitiated).async {
             let size = Simctl.contentSize(udid), contrast = Simctl.increaseContrast(udid)
+            let settings = Simctl.accessibilitySettings(udid)
             DispatchQueue.main.async {
+                if udid == self.selected { self.axSettings = settings }
+                self.slowAnimations = SlowAnimations.isOn
                 if Simctl.contentSizes.contains(size) { self.contentSize = size }
                 self.increaseContrast = contrast
             }

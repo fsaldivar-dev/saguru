@@ -30,7 +30,7 @@ que depende de una app: notificaciones, permisos y datos. Se recuerda por simula
 | | Permisos | Cuadrícula con los permisos que la app declara en su Info.plist y su estado real: Preguntar, Limitado (ubicación al usar la app, fotos solo añadir), Permitir o Nunca. Notificaciones se muestra pero solo la app puede pedirlo |
 | Dispositivo | Apariencia | Claro u oscuro, y «Comparar»: la otra apariencia sobre media pantalla, con un tirador para deslizar. Un lado es la app en vivo; el otro es una foto que se vuelve a tomar sola, unos segundos después de que la pantalla cambie y se quede quieta |
 | | Barra de estado | Eliges cada parte: hora, Wi-Fi (conectado o apagado, e intensidad), red celular (con señal, buscando, sin servicio u oculta; barras y tipo de datos: 5G, LTE, 4G, 3G) y batería. «Valores de catálogo» pone 9:41, señal completa y batería llena |
-| | Accesibilidad | Tamaño de texto y aumentar contraste |
+| | Accesibilidad | **Navegador**: numera los elementos sobre la pantalla en el orden de VoiceOver; ↑ ↓ los recorren, ← → cambian el rotor e Intro activa el elemento. **Árbol**: roles, etiquetas e identificadores (copiables), con resaltado. **Auditoría**: controles sin etiqueta, objetivos táctiles pequeños, contraste bajo, etiquetas e identificadores repetidos, con puntuación. **Ajustes**: animaciones lentas, tamaño de texto, aumentar contraste, texto en negrita, reducir transparencia, reducir movimiento, invertir colores, formas de botón, etiquetas de encendido y diferenciar sin color |
 | | Datos de la app | Abrir carpeta, borrar datos, reiniciar con otro idioma, editar User Defaults |
 | Diseño | Superponer diseño | Una imagen sobre la pantalla, con opacidad ajustable o con deslizador (diseño a un lado, app al otro) |
 | | Cuadrícula | En puntos, alineada a la pantalla |
@@ -86,7 +86,11 @@ sonido, `thread-id`, datos propios.
   vuelve a mostrar su pantalla de bienvenida.
 
 - El radio de las esquinas de la capa de diseño es aproximado.
-- Accesibilidad cubre lo que `simctl` ofrece: tamaño de texto y contraste. Negrita, reducir movimiento y VoiceOver no.
+- El inspector de accesibilidad lee el árbol que el Simulador expone a macOS, así que necesita el permiso de
+  Accesibilidad y que la ventana del Simulador esté en el escritorio actual. VoiceOver no se enciende: el orden y lo
+  que «se leería» se deducen del árbol. El contraste de la auditoría es una estimación sobre una captura.
+- Los ajustes de accesibilidad que `simctl` no cubre se escriben en las preferencias del simulador. Falta la
+  escala de grises: no se pudo confirmar que surta efecto.
 - Simuru pide el permiso de Accesibilidad al arrancar si no lo tiene; macOS lo aplica tras relanzar. `scripts/build.sh`
   firma con tu certificado «Apple Development» si existe, y así el permiso sobrevive a las recompilaciones; sin
   certificado la firma es local y macOS lo vuelve a pedir tras cada build.
