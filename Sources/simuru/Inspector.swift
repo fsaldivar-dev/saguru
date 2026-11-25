@@ -263,11 +263,15 @@ struct AXFinding: Identifiable {
 
 /// A rectangle to draw over the device screen, in fractions of its size.
 struct AXMark: Identifiable, Equatable {
+    enum Tone { case accent, warning, good, measure }
+
     let id: String
     let rect: CGRect
     var number: Int?
+    /// Text drawn with the mark: a size, a distance.
+    var label: String?
     var strong = false
-    var warning = false
+    var tone = Tone.accent
 }
 
 // MARK: - Inspector state
@@ -439,7 +443,7 @@ final class InspectorModel: ObservableObject {
             }
         case .audit:
             for finding in findings {
-                marks.append(AXMark(id: finding.id, rect: fraction(finding.node.frame), strong: finding.id == highlighted, warning: true))
+                marks.append(AXMark(id: finding.id, rect: fraction(finding.node.frame), strong: finding.id == highlighted, tone: .warning))
             }
         case .settings:
             break

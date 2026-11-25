@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Tool: String {
-    case context, push, url, location, privacy, appearance, statusBar, accessibility, data, grid
+    case context, push, url, location, privacy, appearance, statusBar, accessibility, data, grid, colors
 }
 
 struct DefaultsEntry: Identifiable, Hashable {
@@ -78,6 +78,21 @@ final class PanelModel: ObservableObject {
         }
     }
     var needsOverlay: Bool { gridOn || measuring || split != nil || !axMarks.isEmpty }
+
+    /// Layout grid: number of columns (0 = none), side margin and space between columns, in points.
+    @Published var gridColumns = UserDefaults.standard.integer(forKey: "grid.columns") {
+        didSet { UserDefaults.standard.set(gridColumns, forKey: "grid.columns") }
+    }
+    @Published var gridMargin = UserDefaults.standard.object(forKey: "grid.margin") as? Double ?? 16 {
+        didSet { UserDefaults.standard.set(gridMargin, forKey: "grid.margin") }
+    }
+    @Published var gridGutter = UserDefaults.standard.object(forKey: "grid.gutter") as? Double ?? 8 {
+        didSet { UserDefaults.standard.set(gridGutter, forKey: "grid.gutter") }
+    }
+    /// The elements' boxes and measurements the grid draws over the screen.
+    @Published var gridMarks: [AXMark] = []
+    private(set) lazy var grid = GridModel(panel: self)
+    private(set) lazy var palette = PaletteModel(panel: self)
 
     /// Accessibility inspector: its state, the rectangles it draws over the screen, and where the
     /// Simulator window is (top-left coordinates), which the panel controller keeps up to date.
@@ -660,6 +675,7 @@ final class PanelModel: ObservableObject {
     func toggleGrid() {
         guard gridOn || requireAccessibility() else { return }
         gridOn.toggle()
+        grid.sync()
     }
 
     func toggleMeasuring() {

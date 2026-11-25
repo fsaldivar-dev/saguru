@@ -149,7 +149,7 @@ struct RailView: View {
             separator
             RailPopover(model: model, tool: .grid, symbol: "grid", name: "Cuadrícula", active: model.gridOn) { GridForm(model: model) }
             RailButton(model: model, symbol: "ruler", name: "Reglas", active: model.measuring) { model.toggleMeasuring() }
-            RailButton(model: model, symbol: "eyedropper", name: "Cuentagotas") { model.pickColor() }
+            RailPopover(model: model, tool: .colors, symbol: "eyedropper", name: "Colores") { ColorsForm(model: model) }
             separator
             menu
         }

@@ -751,16 +751,3 @@ struct StatusBarForm: View {
         }
     }
 }
-
-struct GridForm: View {
-    @ObservedObject var model: PanelModel
-
-    var body: some View {
-        FormBox(title: "Cuadrícula") {
-            Toggle("Mostrar", isOn: Binding(get: { model.gridOn }, set: { _ in model.toggleGrid() }))
-            Picker("Separación", selection: $model.gridSpacing) {
-                ForEach([4.0, 8, 10, 16, 20, 24], id: \.self) { Text("\(Int($0)) pt").tag($0) }
-            }
-        }
-    }
-}

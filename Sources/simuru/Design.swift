@@ -74,36 +74,62 @@ struct OverlayView: View {
                 }
                 if model.gridOn {
                     Canvas { context, size in
+                        // Layout columns under the fine grid.
+                        if model.gridColumns > 0 {
+                            let margin = model.gridMargin * scale, gutter = model.gridGutter * scale
+                            let count = CGFloat(model.gridColumns)
+                            let width = (size.width - margin * 2 - gutter * (count - 1)) / count
+                            if width > 0 {
+                                for index in 0..<model.gridColumns {
+                                    let x = margin + CGFloat(index) * (width + gutter)
+                                    context.fill(Path(CGRect(x: x, y: 0, width: width, height: size.height)), with: .color(.pink.opacity(0.13)))
+                                }
+                            }
+                        }
                         let step = model.gridSpacing * scale
-                        guard step >= 2 else { return }
+                        guard step >= 3 else { return }
                         var path = Path()
                         var x = step
                         while x < size.width { path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height)); x += step }
                         var y = step
                         while y < size.height { path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y)); y += step }
-                        context.stroke(path, with: .color(.red.opacity(0.45)), lineWidth: 0.5)
+                        context.stroke(path, with: .color(.red.opacity(0.28)), lineWidth: 0.5)
                     }
                 }
                 if model.measuring {
                     rulers(size: geo.size, scale: scale)
                 }
-                ForEach(model.axMarks) { mark in
+                ForEach(model.axMarks + model.gridMarks) { mark in
                     let rect = CGRect(x: mark.rect.minX * geo.size.width, y: mark.rect.minY * geo.size.height,
                                       width: mark.rect.width * geo.size.width, height: mark.rect.height * geo.size.height)
-                    let color = mark.warning ? Color(nsColor: .systemOrange) : Color(nsColor: .systemBlue)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(color.opacity(mark.strong ? 0.22 : 0))
-                        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(color.opacity(mark.strong ? 1 : 0.7), lineWidth: mark.strong ? 2.5 : 1))
-                        .frame(width: max(rect.width, 2), height: max(rect.height, 2))
-                        .offset(x: rect.minX, y: rect.minY)
-                    if let number = mark.number {
-                        Text("\(number)")
-                            .font(.system(size: 10, weight: .bold).monospacedDigit())
+                    let color: Color = {
+                        switch mark.tone {
+                        case .accent: return Color(nsColor: .systemBlue)
+                        case .warning: return Color(nsColor: .systemOrange)
+                        case .good: return Color(nsColor: .systemGreen)
+                        case .measure: return Color(nsColor: .systemPink)
+                        }
+                    }()
+                    if mark.tone == .measure {
+                        // A distance: a line with its value beside it.
+                        Rectangle().fill(color).frame(width: max(rect.width, 1), height: max(rect.height, 1))
+                            .offset(x: rect.minX, y: rect.minY)
+                    } else {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(color.opacity(mark.strong ? 0.22 : 0))
+                            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(color.opacity(mark.strong ? 1 : 0.8), lineWidth: mark.strong ? 2.5 : 1))
+                            .frame(width: max(rect.width, 2), height: max(rect.height, 2))
+                            .offset(x: rect.minX, y: rect.minY)
+                    }
+                    if let text = mark.number.map({ "\($0)" }) ?? mark.label {
+                        Text(text)
+                            .font(.system(size: mark.tone == .measure ? 9 : 10, weight: .bold).monospacedDigit())
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4).padding(.vertical, 1)
                             .background(color, in: Capsule())
                             .fixedSize()
-                            .offset(x: rect.minX + 2, y: rect.minY + 2)
+                            .offset(x: mark.tone != .measure ? rect.minX + 2 : (rect.width > rect.height ? rect.midX - 8 : rect.maxX + 3),
+                                    y: mark.tone != .measure ? rect.minY + 2 : (rect.width > rect.height ? rect.minY - 15 : rect.midY - 7))
                     }
                 }
             }
