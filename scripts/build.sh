@@ -32,6 +32,11 @@ xcrun -sdk iphonesimulator clang -arch arm64 -arch x86_64 -dynamiclib -fobjc-arc
   -framework UIKit -framework QuartzCore -framework CoreGraphics -framework IOSurface \
   agent/SaguruAgent.m agent/SaguruCamera.m -o "$APP/Contents/Resources/SaguruAgent.dylib"
 
+# scrcpy's server, to use an Android phone as the camera's source (Apache 2.0, see vendor/scrcpy).
+cp vendor/scrcpy/scrcpy-server "$APP/Contents/Resources/scrcpy-server"
+cp vendor/scrcpy/VERSION "$APP/Contents/Resources/scrcpy-server.version"
+cp vendor/scrcpy/LICENSE "$APP/Contents/Resources/scrcpy-LICENSE.txt"
+
 # LSUIElement: no Dock icon, Saguru behaves as an extension of the Simulator.
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

@@ -4,8 +4,8 @@ import Network
 import VideoToolbox
 
 // An Android phone as the camera's source. macOS does not list it as a camera, so its camera is asked for
-// over USB: scrcpy's server (it must be installed on this Mac, `brew install scrcpy`) runs on the phone in
-// camera mode and sends H.264, which is decoded here. Nothing is installed on the phone for good: the
+// over USB: scrcpy's server (shipped inside Saguru.app, see vendor/scrcpy) runs on the phone in camera mode
+// and sends H.264, which is decoded here. Nothing is installed on the phone for good: the
 // server is a file in its temporary folder that removes itself.
 
 enum ADB {
@@ -61,24 +61,14 @@ final class AndroidCamera {
     private var port: UInt16 = 0
     private var running = false
 
-    /// scrcpy's server file and the version it must be started with.
+    /// scrcpy's server file and the version it must be started with: the one that ships inside Saguru.app.
     static let scrcpy: (server: String, version: String)? = {
-        for prefix in ["/opt/homebrew", "/usr/local"] {
-            let server = "\(prefix)/share/scrcpy/scrcpy-server", tool = "\(prefix)/bin/scrcpy"
-            guard FileManager.default.fileExists(atPath: server) else { continue }
-            let p = Process(), pipe = Pipe()
-            p.executableURL = URL(fileURLWithPath: tool)
-            p.arguments = ["--version"]
-            p.standardOutput = pipe
-            p.standardError = FileHandle.nullDevice
-            guard (try? p.run()) != nil else { continue }
-            let text = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            p.waitUntilExit()
-            // "scrcpy 4.0 <https://…>"
-            let words = text.split(whereSeparator: { $0 == " " || $0 == "\n" })
-            if words.count >= 2 { return (server, String(words[1])) }
-        }
-        return nil
+        guard let resources = Bundle.main.resourceURL else { return nil }
+        let server = resources.appendingPathComponent("scrcpy-server").path
+        guard FileManager.default.fileExists(atPath: server),
+              let version = try? String(contentsOf: resources.appendingPathComponent("scrcpy-server.version"), encoding: .utf8)
+        else { return nil }
+        return (server, version.trimmingCharacters(in: .whitespacesAndNewlines))
     }()
 
     /// `queue` is the serial queue frames are delivered on.
@@ -90,10 +80,16 @@ final class AndroidCamera {
 
     /// Call on `queue`.
     func start() {
-        guard let scrcpy = Self.scrcpy else { onProblem?("Para usar un Android hace falta scrcpy en esta Mac: brew install scrcpy"); return }
+        guard let scrcpy = Self.scrcpy else { onProblem?("Falta el servidor de cámara en Saguru.app. Vuelve a construir con scripts/build.sh."); return }
         guard ADB.path != nil else { onProblem?("No se encontró adb. Instala Android platform-tools."); return }
         running = true
-        let id = String(format: "%08x", UInt32.random(in: 1...0x7FFF_FFFF))
+        // Saguru's sessions carry a recognisable id, so one left behind (Saguru was killed while a phone was
+        // the source) can be told from the user's own scrcpy and cleared here.
+        for line in (ADB.output(["-s", serial, "forward", "--list"]) ?? "").split(separator: "\n") {
+            let parts = line.split(separator: " ")
+            if parts.count == 3, parts[2].hasPrefix("localabstract:scrcpy_5a60") { _ = ADB.output(["-s", serial, "forward", "--remove", String(parts[1])]) }
+        }
+        let id = String(format: "5a60%04x", UInt32.random(in: 0...0xFFFF))
         let jar = "/data/local/tmp/saguru-camera.jar"
         // The server deletes its own file when it starts, so it is copied every time.
         _ = ADB.output(["-s", serial, "push", scrcpy.server, jar])

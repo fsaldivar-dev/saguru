@@ -120,10 +120,11 @@ sonido, `thread-id`, datos propios.
   (escáner de documentos de VisionKit, `UIImagePickerController`, `DataScanner`) no están cubiertas, y una app que
   abra el escáner de documentos con la cámara activa se cierra. Solo se detectan códigos QR, no otros códigos de
   barras. No hay video grabado, cámara frontal y trasera distintas, zoom, linterna, enfoque ni profundidad. Un
-  Android como fuente necesita `scrcpy` instalado en la Mac (`brew install scrcpy`), depuración USB y Android 12 o
-  posterior; usa su cámara trasera. La app solo recibe la cámara si Saguru la lanzó.
+  Android como fuente necesita `adb`, depuración USB y Android 12 o posterior; usa su cámara trasera. El video lo
+  entrega el servidor de scrcpy, que va incluido en Saguru (`vendor/scrcpy`, licencia Apache 2.0). La app solo recibe la cámara si Saguru la lanzó.
 - Fuera de alcance por ahora: captura de pantalla o video (ya lo hace el Simulador).
 
 ## Licencia
 
-[MIT](LICENSE)
+[MIT](LICENSE). Incluye el servidor de [scrcpy](https://github.com/Genymobile/scrcpy), con licencia Apache 2.0
+(`vendor/scrcpy`).
