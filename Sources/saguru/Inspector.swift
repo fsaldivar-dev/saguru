@@ -625,7 +625,7 @@ struct AccessibilityForm: View {
                         }
                     }
                 }
-                .frame(height: 300)
+                .frame(minHeight: 240, maxHeight: .infinity)
                 .onChange(of: inspector.focus) { if let focus = inspector.focus { proxy.scrollTo(focus) } }
             }
             HStack(spacing: 8) {
@@ -681,7 +681,7 @@ struct AccessibilityForm: View {
                     }
                 }
             }
-            .frame(height: 220)
+            .frame(minHeight: 220, maxHeight: .infinity)
             if let node = inspector.nodes.first(where: { $0.id == inspector.selected }) {
                 detail(node)
             } else {
@@ -772,7 +772,7 @@ struct AccessibilityForm: View {
                         }
                     }
                 }
-                .frame(height: 300)
+                .frame(minHeight: 240, maxHeight: .infinity)
                 Text("La puntuación es la parte de los elementos sin nada que corregir. El contraste es una estimación.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }

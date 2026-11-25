@@ -36,8 +36,13 @@ struct DrawerView: View {
         case nil:
             Color.clear.frame(width: 1)
         default:
-            // Forms keep their own width; the panel takes it, and scrolls when the Simulator is short.
-            ScrollView(.vertical) { form }
+            // A tool fills the panel, and scrolls instead of being cut when the Simulator is short.
+            GeometryReader { area in
+                ScrollView(.vertical) {
+                    form.frame(minHeight: area.size.height, alignment: .top)
+                }
+            }
+            .frame(minWidth: 590, idealWidth: 660)
         }
     }
 

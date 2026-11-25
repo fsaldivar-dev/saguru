@@ -409,7 +409,7 @@ struct GridForm: View {
                             }
                         }
                     }
-                    .frame(height: 190)
+                    .frame(minHeight: 190, maxHeight: .infinity)
                     Text("Como en una herramienta de diseño: cada caja se mide contra la de al lado, o contra la pared de su contenedor si no tiene vecina. Elige una caja para ver todas sus distancias, y entra en un contenedor para medir lo de dentro. Los contenedores se detectan por su fondo en una captura, con medio punto de margen de error.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }

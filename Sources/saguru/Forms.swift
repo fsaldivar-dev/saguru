@@ -96,8 +96,9 @@ struct FormBox<Content: View>: View {
         .textFieldStyle(.roundedBorder)
         .toggleStyle(.switch)
         .controlSize(roomy ? .regular : .small)
-        .padding(roomy ? 20 : 14)
-        .frame(width: width, alignment: .leading)
+        .padding(20)
+        // In the docked panel a tool takes all the room there is; `width` is kept for callers but no longer used.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -282,7 +283,25 @@ struct PushForm: View {
 
     var body: some View {
         FormBox(title: "Notificación push", width: 400, target: model) {
-            if showJSON { jsonEditor } else { fields }
+            HStack(alignment: .top, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
+                    if showJSON { jsonEditor } else { fields }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Así se verá").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                    preview
+                    if !showJSON {
+                        Text("Payload").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 6)
+                        CodeView(text: BodyContent.prettyJSON(String(decoding: formPayload, as: UTF8.self)), language: .json)
+                            .frame(minHeight: 120, maxHeight: .infinity)
+                            .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
+                .frame(width: 270)
+                .frame(maxHeight: .infinity, alignment: .top)
+            }
             permission
             HStack {
                 Button(showJSON ? "Ver formulario" : "Ver JSON") {
@@ -356,6 +375,35 @@ struct PushForm: View {
         }
     }
 
+    /// The banner as iOS would draw it, from whatever is being edited.
+    private var preview: some View {
+        let shown: (title: String, subtitle: String, body: String) = {
+            guard showJSON else { return (title, subtitle, message) }
+            let aps = ((try? JSONSerialization.jsonObject(with: Data(plainQuotes(json).utf8))) as? [String: Any])?["aps"] as? [String: Any]
+            if let alert = aps?["alert"] as? [String: Any] {
+                return (alert["title"] as? String ?? "", alert["subtitle"] as? String ?? "", alert["body"] as? String ?? "")
+            }
+            return ("", "", aps?["alert"] as? String ?? "")
+        }()
+        return HStack(alignment: .top, spacing: 10) {
+            AppBadge(app: model.app, size: 34)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack {
+                    Text(shown.title.isEmpty ? (model.app?.name ?? "App") : shown.title).font(.callout.weight(.semibold)).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("ahora").font(.caption).foregroundStyle(.secondary)
+                }
+                if !shown.subtitle.isEmpty { Text(shown.subtitle).font(.callout.weight(.medium)).lineLimit(1) }
+                Text(shown.body.isEmpty ? "Sin texto" : shown.body).font(.callout).lineLimit(4)
+                    .foregroundStyle(shown.body.isEmpty ? .secondary : .primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
     private var jsonEditor: some View {
         VStack(alignment: .leading, spacing: 6) {
             TextEditor(text: $json)
@@ -363,7 +411,7 @@ struct PushForm: View {
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .frame(height: 260)
+                .frame(minHeight: 260, maxHeight: .infinity)
             if !jsonIsValid {
                 Label("El JSON no es válido", systemImage: "exclamationmark.triangle")
                     .font(.callout).foregroundStyle(Color(nsColor: .systemOrange))
@@ -566,8 +614,8 @@ struct LocationForm: View {
                     if let coordinate = proxy.convert(position, from: .local) { move(to: coordinate, zoom: false) }
                 }
             }
-            .frame(height: 280)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(minHeight: 280, maxHeight: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .help("Haz clic en el mapa para elegir el punto")
             HStack(spacing: 10) {
                 Labeled("Latitud") { TextField("", text: $latitude) }
@@ -638,12 +686,10 @@ struct AppearanceForm: View {
 
     var body: some View {
         FormBox(title: "Apariencia", device: model.device?.name, width: 340, symbol: "circle.lefthalf.filled") {
-            Picker("Apariencia", selection: Binding(get: { model.appearance }, set: { model.setAppearance($0) })) {
-                Text("Claro").tag("light")
-                Text("Oscuro").tag("dark")
+            HStack(spacing: 14) {
+                tile("Claro", "sun.max", value: "light", page: Color(white: 0.96), ink: Color(white: 0.15))
+                tile("Oscuro", "moon", value: "dark", page: Color(white: 0.09), ink: Color(white: 0.92))
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             Divider()
             HStack {
                 Toggle("Comparar claro y oscuro", isOn: Binding(get: { model.split == .appearance || model.capturing },
@@ -660,6 +706,40 @@ struct AppearanceForm: View {
         }
         .onAppear { model.loadAppearance() }
     }
+
+    /// A little screen in each appearance: the choice is seen, not read.
+    private func tile(_ name: String, _ symbol: String, value: String, page: Color, ink: Color) -> some View {
+        let chosen = model.appearance == value
+        return Button { model.setAppearance(value) } label: {
+            VStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack {
+                        RoundedRectangle(cornerRadius: 3).fill(ink).frame(width: 54, height: 9)
+                        Spacer()
+                        Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(ink.opacity(0.7))
+                    }
+                    RoundedRectangle(cornerRadius: 3).fill(ink.opacity(0.35)).frame(height: 6)
+                    RoundedRectangle(cornerRadius: 3).fill(ink.opacity(0.35)).frame(width: 110, height: 6)
+                    Spacer(minLength: 0)
+                    RoundedRectangle(cornerRadius: 7).fill(Color(nsColor: .systemBlue)).frame(height: 22)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity)
+                .frame(height: 132)
+                .background(page, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(chosen ? Color(nsColor: .systemBlue) : Color.white.opacity(0.14), lineWidth: chosen ? 3 : 1))
+                HStack(spacing: 6) {
+                    Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(chosen ? Color(nsColor: .systemBlue) : Color.secondary)
+                    Text(name).fontWeight(chosen ? .semibold : .regular)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
+    }
 }
 
 struct StatusBarForm: View {
@@ -667,6 +747,7 @@ struct StatusBarForm: View {
 
     var body: some View {
         FormBox(title: "Barra de estado", device: model.device?.name, width: 420, symbol: "antenna.radiowaves.left.and.right") {
+            preview
             Toggle("Personalizar la barra de estado", isOn: Binding(get: { model.cleanBar }, set: { model.setStatusBar(on: $0) }))
             VStack(alignment: .leading, spacing: 14) {
                 Labeled("Hora") { TextField("9:41", text: $model.statusBar.time).frame(width: 90) }
@@ -724,6 +805,51 @@ struct StatusBarForm: View {
                     .help("9:41, señal completa y batería llena, como en las imágenes de Apple")
             }
         }
+    }
+
+    /// The bar as the settings below leave it.
+    private var preview: some View {
+        let bar = model.statusBar
+        return HStack(spacing: 7) {
+            Text(bar.time.isEmpty ? "9:41" : bar.time).font(.system(size: 17, weight: .semibold)).monospacedDigit()
+            Spacer()
+            if bar.cellular == "active" {
+                HStack(alignment: .bottom, spacing: 2.5) {
+                    ForEach(1...4, id: \.self) { step in
+                        RoundedRectangle(cornerRadius: 1.5).fill(.white.opacity(step <= bar.cellularBars ? 1 : 0.3))
+                            .frame(width: 4, height: 4 + CGFloat(step) * 2.6)
+                    }
+                }
+                if !bar.wifiOn, bar.data != "hide" {
+                    Text(Simctl.StatusBar.dataTypes.first { $0.id == bar.data }?.name ?? "").font(.system(size: 13, weight: .semibold))
+                }
+            } else if bar.cellular == "searching" {
+                Text("Buscando…").font(.system(size: 13, weight: .medium))
+            } else if bar.cellular == "failed" {
+                Text("Sin servicio").font(.system(size: 13, weight: .medium))
+            }
+            if bar.wifiOn {
+                Image(systemName: "wifi", variableValue: Double(bar.wifiBars) / 3).font(.system(size: 15, weight: .semibold))
+            }
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 4.5).strokeBorder(.white.opacity(0.45), lineWidth: 1).frame(width: 27, height: 13)
+                RoundedRectangle(cornerRadius: 2.5)
+                    .fill(bar.charging ? Color(nsColor: .systemGreen) : (bar.batteryLevel <= 20 ? Color(nsColor: .systemRed) : .white))
+                    .frame(width: max(2, 23 * CGFloat(bar.batteryLevel) / 100), height: 9)
+                    .padding(.leading, 2)
+                if bar.charging {
+                    Image(systemName: "bolt.fill").font(.system(size: 8, weight: .bold)).foregroundStyle(.black).frame(width: 27)
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 26)
+        .frame(height: 50)
+        .frame(maxWidth: .infinity)
+        .background(.black, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.12)))
+        .overlay(Capsule().fill(Color(white: 0.16)).frame(width: 96, height: 28))
+        .opacity(model.cleanBar ? 1 : 0.55)
     }
 
     private func level(_ name: String, _ value: Binding<Int>, upTo top: Int) -> some View {

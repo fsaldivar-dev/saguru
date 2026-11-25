@@ -239,7 +239,7 @@ struct DataForm: View {
                 case .actions: actions
                 }
             }
-            .frame(height: 400, alignment: .top)
+            .frame(minHeight: 400, maxHeight: .infinity, alignment: .top)
         }
         .disabled(bundleID.isEmpty)
         .onAppear(perform: reload)

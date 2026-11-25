@@ -266,7 +266,7 @@ struct GalleryView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20).padding(.vertical, 12)
         }
-        .frame(width: 470, height: 500)
+        .frame(minWidth: 470, maxWidth: .infinity, minHeight: 400, maxHeight: .infinity)
         .tint(Color(nsColor: .systemBlue))
         .environment(\.colorScheme, .dark)
         .overlay {
