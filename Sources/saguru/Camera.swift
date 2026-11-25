@@ -91,9 +91,29 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         return "\(udid)|\(panel.appID)"
     }
 
-    var isActive: Bool { active != nil && active == key }
-    /// The folder the agent is pointed at, while an app is using the camera.
-    var agentFolder: URL? { active == nil ? nil : channel?.folder }
+    /// The chosen app is running, launched by Saguru, with the camera in it.
+    var isActive: Bool { active != nil && active == key && panel.agentAlive && panel.agentRun?.camera == true }
+    /// Apps the camera has been asked for; they keep it on every relaunch Saguru does.
+    private var wanted = Set<String>()
+
+    /// Where the pictures go, when the app about to be launched is one that wants the camera.
+    func folderForLaunch(of key: String) -> URL? {
+        wanted.contains(key) ? ensureChannel()?.folder : nil
+    }
+
+    /// Called when Saguru has launched an app, with or without the camera.
+    func launched(_ key: String, camera: Bool) {
+        active = camera ? key : nil
+        restart()
+        renderImage()
+    }
+
+    func agentWentAway() {
+        guard active != nil else { return }
+        active = nil
+        problem = "La app se cerró o se lanzó fuera de Saguru: ya no tiene la cámara."
+        restart()
+    }
 
     func reloadDevices() {
         let found = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
@@ -123,22 +143,24 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         guard let udid = panel.selected, !panel.appID.isEmpty, let key else { problem = "Elige una app para darle la cámara."; return }
         guard ensureChannel() != nil else { problem = "No se pudo preparar el canal de imagen."; return }
         let bundleID = panel.appID
-        active = key
+        wanted.insert(key)
         problem = nil
-        restart()
-        renderImage()
-        let environment = panel.agentEnvironment()
+        // Already running with the camera in it: there is nothing to relaunch.
+        if panel.agentAlive, panel.agentRun?.camera == true { launched(key, camera: true); return }
         DispatchQueue.global(qos: .userInitiated).async {
             // The app must not stop at the permission alert: the camera it will see is ours.
             _ = try? Simctl.run(["privacy", udid, "grant", "camera", bundleID])
-            let failure = AgentLauncher.launch(udid: udid, bundleID: bundleID, environment: environment)
             DispatchQueue.main.async {
-                if let failure { self.problem = failure; self.active = nil } else { self.panel.say("Cámara activa en \(self.panel.app?.name ?? bundleID)") }
+                self.panel.launchWithAgent { failure in
+                    if let failure { self.problem = failure } else { self.panel.say("Cámara activa en \(self.panel.app?.name ?? bundleID)") }
+                }
             }
         }
     }
 
+    /// The app keeps the pretend camera until its next launch; Saguru just stops asking for it.
     func deactivate() {
+        if let key { wanted.remove(key) }
         active = nil
         restart()
     }
@@ -258,30 +280,34 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
 
 /// Launches an app with Saguru's agent inside. Returns what went wrong, if anything.
 enum AgentLauncher {
-    static func launch(udid: String, bundleID: String, environment extra: [String: String]) -> String? {
+    /// Returns the launched app's process, or what went wrong.
+    static func launch(udid: String, bundleID: String, environment extra: [String: String], arguments: [String] = []) -> (pid: Int32?, failure: String?) {
         guard let agent = Bundle.main.resourceURL?.appendingPathComponent("SaguruAgent.dylib"),
               FileManager.default.fileExists(atPath: agent.path) else {
-            return "Falta SaguruAgent.dylib en Saguru.app. Vuelve a construir con scripts/build.sh."
+            return (nil, "Falta SaguruAgent.dylib en Saguru.app. Vuelve a construir con scripts/build.sh.")
         }
-        let process = Simctl.process(["launch", "--terminate-running-process", udid, bundleID])
+        let process = Simctl.process(["launch", "--terminate-running-process", udid, bundleID] + arguments)
         var environment = ProcessInfo.processInfo.environment
         environment["SIMCTL_CHILD_DYLD_INSERT_LIBRARIES"] = agent.path
         for (name, value) in extra { environment["SIMCTL_CHILD_\(name)"] = value }
         process.environment = environment
-        let errors = Pipe()
-        process.standardOutput = Pipe()
+        let output = Pipe(), errors = Pipe()
+        process.standardOutput = output
         process.standardError = errors
         do {
             try process.run()
+            // "dev.example.app: 12345"
+            let printed = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
             let text = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
             process.waitUntilExit()
             if process.terminationStatus != 0 {
                 let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                return message.isEmpty ? "No se pudo lanzar la app." : message
+                return (nil, message.isEmpty ? "No se pudo lanzar la app." : message)
             }
-            return nil
+            let pid = printed.split(separator: ":").last.flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            return (pid, nil)
         } catch {
-            return "No se pudo ejecutar xcrun simctl."
+            return (nil, "No se pudo ejecutar xcrun simctl.")
         }
     }
 }

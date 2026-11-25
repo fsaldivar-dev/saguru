@@ -78,6 +78,10 @@ sonido, `thread-id`, datos propios.
   de notificaciones, del archivo donde iOS los guarda.
 - La columna localiza la ventana del Simulador con la lista pública de ventanas del sistema y se ordena justo encima de ella.
 - La capa de diseño usa la API de Accesibilidad para leer el rectángulo de la pantalla del dispositivo.
+- Red y cámara necesitan que la app arranque con el agente dentro, así que comparten un único lanzamiento: lo
+  pida la herramienta que lo pida, la app sale con la red vigilada y con la cámara si se le dio alguna vez. Activar
+  una no quita la otra, ni tampoco «Reiniciar» desde Datos. Saguru vigila ese proceso: si la app se cierra o se
+  lanza desde Xcode o la pantalla de inicio, lo avisa en la herramienta en vez de seguir diciendo que captura.
 - La cámara usa el mismo agente (`agent/SaguruCamera.m`): dentro de la app sustituye a la cámara que falta, y recibe
   los fotogramas de Saguru por un archivo que ambos mapean en memoria. `experiments/camera/app.m` es la app mínima
   con la que se probó cada caso.

@@ -140,8 +140,6 @@ final class NetworkModel: ObservableObject {
 
     unowned let panel: PanelModel
     private var folder: URL?
-    /// Where the agent reports to, while an app is being watched.
-    var sessionFolder: URL? { folder }
     private var offset: UInt64 = 0
     private var pending = Data()
     private var timer: Timer?
@@ -158,7 +156,8 @@ final class NetworkModel: ObservableObject {
     }
 
     /// Whether the app chosen in the rail is the one being watched.
-    var isWatching: Bool { watching != nil && watching == key }
+    /// The chosen app is running, launched by Saguru, and reporting its network.
+    var isWatching: Bool { watching != nil && watching == key && panel.agentAlive }
 
     var filtered: [NetEntry] {
         let text = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -180,13 +179,23 @@ final class NetworkModel: ObservableObject {
 
     // MARK: Watching
 
-    /// Relaunches the app with the agent inside. An app can only be watched from its launch.
+    /// Shows the app's network. An app launched by Saguru is already reporting it; otherwise it is relaunched,
+    /// because an app can only be watched from its launch.
     func start() {
-        guard let udid = panel.selected, !panel.appID.isEmpty, let key else {
-            problem = "Elige una app en el riel para ver su red."
-            return
-        }
-        let bundleID = panel.appID
+        guard panel.selected != nil, !panel.appID.isEmpty else { problem = "Elige una app para ver su red."; return }
+        if panel.agentAlive, watching == key { return }
+        relaunch()
+    }
+
+    /// Launches the app again, to capture from its start.
+    func relaunch() {
+        problem = nil
+        panel.launchWithAgent { failure in if let failure { self.problem = failure } }
+    }
+
+    /// A launch by Saguru is about to happen: a fresh folder for the agent to report to. Every such launch
+    /// is watched, whichever tool asked for it.
+    func beginSession(for key: String) -> URL {
         loadMocksIfNeeded()
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("saguru-net/\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -195,23 +204,18 @@ final class NetworkModel: ObservableObject {
         offset = 0
         pending = Data()
         publishMocks()
-        problem = nil
-
-        let environment = panel.agentEnvironment()
-        DispatchQueue.global(qos: .userInitiated).async {
-            let failure = AgentLauncher.launch(udid: udid, bundleID: bundleID, environment: environment)
-            DispatchQueue.main.async {
-                if let failure {
-                    self.problem = failure
-                    return
-                }
-                self.watching = key
-                self.timer?.invalidate()
-                let timer = Timer(timeInterval: 0.35, repeats: true) { [weak self] _ in self?.poll() }
-                RunLoop.main.add(timer, forMode: .common)
-                self.timer = timer
-            }
+        watching = key
+        if timer == nil {
+            let timer = Timer(timeInterval: 0.35, repeats: true) { [weak self] _ in self?.poll() }
+            RunLoop.main.add(timer, forMode: .common)
+            self.timer = timer
         }
+        return folder
+    }
+
+    func agentWentAway() {
+        guard watching != nil else { return }
+        problem = "La app se cerró o se lanzó fuera de Saguru: ya no se captura."
     }
 
     func stop() {
@@ -513,7 +517,7 @@ struct NetworkView: View {
             }
             if model.isWatching {
                 Button("Limpiar") { model.clear() }
-                Button("Relanzar") { model.start() }
+                Button("Relanzar") { model.relaunch() }
                     .help("Vuelve a lanzar la app y captura desde su arranque")
             } else {
                 Button("Capturar") { model.start() }

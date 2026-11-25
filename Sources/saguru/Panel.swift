@@ -91,6 +91,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
         let every = sim == nil ? 20 : (moving || model.measuring || model.split != nil ? 1 : 6)
         if tick % every == 0 || model.openTool != shownTool { follow() }
         if tick % 240 == 0 { model.refreshDevices() }
+        if tick % 60 == 0 { model.checkAgent() }
         updateToast()
     }
 

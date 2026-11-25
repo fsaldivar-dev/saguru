@@ -110,13 +110,52 @@ final class PanelModel: ObservableObject {
     private(set) lazy var network = NetworkModel(panel: self)
     private(set) lazy var camera = CameraModel(panel: self)
 
-    /// What Saguru's agent is told when an app is launched with it: where to report the network, where the camera's pictures are.
-    func agentEnvironment() -> [String: String] {
-        var environment: [String: String] = [:]
-        if let folder = network.sessionFolder { environment["SAGURU_NET_FOLDER"] = folder.path }
-        if let folder = camera.agentFolder { environment["SAGURU_CAM_FOLDER"] = folder.path }
-        return environment
+    /// The app instance Saguru launched with its agent inside.
+    struct AgentRun: Equatable {
+        let key: String
+        let pid: Int32
+        let camera: Bool
     }
+
+    @Published private(set) var agentRun: AgentRun?
+
+    /// The chosen app is the instance Saguru launched, and it is still running.
+    var agentAlive: Bool {
+        guard let run = agentRun, let udid = selected, run.key == "\(udid)|\(appID)" else { return false }
+        return kill(run.pid, 0) == 0
+    }
+
+    /// The one way Saguru launches an app with its agent. Whichever tool asks, the app gets everything that
+    /// needs to be there from launch: the network is always reported, and the camera is in it if it was asked
+    /// for. So turning on one tool never takes another away.
+    func launchWithAgent(arguments: [String] = [], completion: ((String?) -> Void)? = nil) {
+        guard let udid = selected, !appID.isEmpty else { completion?("Elige una app."); return }
+        let bundleID = appID, key = "\(udid)|\(bundleID)"
+        var environment = ["SAGURU_NET_FOLDER": network.beginSession(for: key).path]
+        let cameraFolder = camera.folderForLaunch(of: key)
+        if let cameraFolder { environment["SAGURU_CAM_FOLDER"] = cameraFolder.path }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = AgentLauncher.launch(udid: udid, bundleID: bundleID, environment: environment, arguments: arguments)
+            DispatchQueue.main.async {
+                if let pid = result.pid, result.failure == nil {
+                    self.agentRun = AgentRun(key: key, pid: pid, camera: cameraFolder != nil)
+                    self.camera.launched(key, camera: cameraFolder != nil)
+                } else {
+                    self.agentRun = nil
+                }
+                completion?(result.failure ?? (result.pid == nil ? "No se pudo saber si la app arrancó." : nil))
+            }
+        }
+    }
+
+    /// Called every second: an app closed, or launched again from Xcode or the home screen, has no agent any more.
+    func checkAgent() {
+        guard let run = agentRun, kill(run.pid, 0) != 0 else { return }
+        agentRun = nil
+        network.agentWentAway()
+        camera.agentWentAway()
+    }
+
     @Published var axMarks: [AXMark] = []
     var simulatorWindow: CGRect?
 
@@ -628,6 +667,17 @@ final class PanelModel: ObservableObject {
     }
 
     func relaunch(bundleID: String, language: String, region: String) {
+        // An app Saguru is watching (network, camera) is relaunched with all of that still in it.
+        if bundleID == appID, agentRun != nil {
+            var arguments: [String] = []
+            if !language.isEmpty {
+                arguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", region.isEmpty ? language : "\(language)_\(region)"]
+            }
+            launchWithAgent(arguments: arguments) { failure in
+                self.say(failure ?? (language.isEmpty ? "App reiniciada" : "App reiniciada en «\(language)»"))
+            }
+            return
+        }
         perform(language.isEmpty ? "App reiniciada" : "App reiniciada en «\(language)»") { device in
             try Simctl.relaunch(device.udid, bundleID: bundleID, language: language, region: region)
         }
