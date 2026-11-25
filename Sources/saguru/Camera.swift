@@ -292,6 +292,7 @@ struct CameraForm: View {
     @ObservedObject var model: PanelModel
     @ObservedObject var camera: CameraModel
     @State private var dropping = false
+    @AppStorage("camera.limits") private var showLimits = true
 
     var body: some View {
         FormBox(title: "Cámara", target: model) {
@@ -339,8 +340,7 @@ struct CameraForm: View {
                             .foregroundStyle(Color(nsColor: .systemOrange)).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
-                    Text("Cubre el visor, los fotogramas (Vision, OCR), la lectura de QR, la foto, las cámaras frontal y trasera y la pantalla de cámara del sistema. No cubre el escáner de documentos de Apple.")
-                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    limits
                 }
                 .frame(width: 250)
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -352,6 +352,45 @@ struct CameraForm: View {
         }
         .onDisappear { camera.visible = false }
     }
+
+    /// What the pretend camera covers and what it does not, where it is used rather than only in the README.
+    private var limits: some View {
+        DisclosureGroup(isExpanded: $showLimits) {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Self.works, id: \.self) { line(it: $0, good: true) }
+                ForEach(Self.fails, id: \.self) { line(it: $0, good: false) }
+                Text("La app solo recibe la cámara si Saguru la lanzó; al lanzarla desde Xcode hay que volver a dársela.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 4)
+            }
+            .padding(.top, 6)
+        } label: {
+            Text("Alcance y límites").font(.callout.weight(.medium))
+        }
+    }
+
+    private func line(it text: String, good: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 7) {
+            Image(systemName: good ? "checkmark" : "xmark").font(.caption.weight(.bold))
+                .foregroundStyle(good ? Color(nsColor: .systemGreen) : Color(nsColor: .systemRed)).frame(width: 12)
+            Text(text).font(.caption).foregroundStyle(good ? .primary : .secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private static let works = [
+        "Visor y fotogramas en vivo",
+        "Foto, con cámara trasera y frontal",
+        "Lectura de QR",
+        "Pantalla de cámara del sistema (UIImagePickerController)",
+        "Vision: códigos, texto, rectángulos y documentos",
+    ]
+    private static let fails = [
+        "Escáner de documentos de Apple y DataScanner: la app se cierra",
+        "Otros códigos de barras por el aviso de iOS (solo QR)",
+        "Vision: puntos de la cara, personas y clasificación",
+        "Video grabado, zoom, linterna y enfoque",
+        "Frontal espejada o con una fuente distinta de la trasera",
+        "Android: solo cámara trasera, Android 12 o posterior",
+    ]
 
     private var picture: some View {
         ZStack {
