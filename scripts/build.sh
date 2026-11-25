@@ -47,7 +47,11 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --sign - "$APP" >/dev/null 2>&1
+# Sign with a development certificate when there is one: macOS ties the Accessibility permission to the
+# signature, and an ad-hoc signature changes on every build, so the permission would be asked for again
+# after each rebuild. Without a certificate it falls back to ad-hoc.
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null | awk '/Apple Development/ {print $2; exit}')"
+codesign --force --sign "${IDENTITY:--}" "$APP" >/dev/null 2>&1 || codesign --force --sign - "$APP" >/dev/null 2>&1
 echo "OK  $APP"
 
 if [[ "${1:-}" == "--install" ]]; then

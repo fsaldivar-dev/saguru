@@ -24,15 +24,15 @@ que depende de una app: notificaciones, permisos y datos. Se recuerda por simula
 | Grupo | Botón | Qué hace |
 |---|---|---|
 | Inyectar | Notificación push | Título, subtítulo, texto, badge, sonido y datos propios; vista JSON para editar el payload o abrir un `.apns`. Avisa antes de enviar si la app no tiene permiso de notificaciones |
-| | Añadir fotos y videos | Selector de archivos, o arrastra archivos a la columna |
-| | Abrir URL | URLs y deep links |
-| | Ubicación | Coordenadas o lugares guardados |
-| | Permisos | Conceder, revocar o restablecer para la app activa |
-| Dispositivo | Claro / oscuro | Alterna la apariencia |
-| | Barra de estado limpia | 9:41, batería y señal llenas |
+| | Galería | Popover con las fotos y videos del simulador: añadir (botón o arrastrando), seleccionar varias, exportar (botón o arrastrando a Finder) y eliminar. También se pueden soltar archivos sobre la columna |
+| | Deep links | Abre URLs y deep links. Muestra los esquemas y dominios que declara la app activa, y guarda favoritos e historial por app. Las rutas no se pueden leer de la app: se guardan las que uses |
+| | Ubicación | Un mapa donde eliges el punto con un clic, buscador de lugares y coordenadas editables |
+| | Permisos | Cuadrícula con los permisos que la app declara en su Info.plist y su estado real: Preguntar, Limitado (ubicación al usar la app, fotos solo añadir), Permitir o Nunca. Notificaciones se muestra pero solo la app puede pedirlo |
+| Dispositivo | Apariencia | Claro u oscuro, y «Comparar»: la otra apariencia sobre media pantalla, con un tirador para deslizar. Un lado es la app en vivo; el otro es una foto que se vuelve a tomar sola, unos segundos después de que la pantalla cambie y se quede quieta |
+| | Barra de estado | Eliges cada parte: hora, Wi-Fi (conectado o apagado, e intensidad), red celular (con señal, buscando, sin servicio u oculta; barras y tipo de datos: 5G, LTE, 4G, 3G) y batería. «Valores de catálogo» pone 9:41, señal completa y batería llena |
 | | Accesibilidad | Tamaño de texto y aumentar contraste |
 | | Datos de la app | Abrir carpeta, borrar datos, reiniciar con otro idioma, editar User Defaults |
-| Diseño | Superponer diseño | Una imagen sobre la pantalla, con opacidad ajustable |
+| Diseño | Superponer diseño | Una imagen sobre la pantalla, con opacidad ajustable o con deslizador (diseño a un lado, app al otro) |
 | | Cuadrícula | En puntos, alineada a la pantalla |
 | | Reglas | Coordenadas del cursor; ⌥ fija una guía y mide la distancia. No captura clics: la app sigue usable |
 | | Cuentagotas | Copia el color como `Color` de SwiftUI |
@@ -70,15 +70,26 @@ sonido, `thread-id`, datos propios.
 
 ## Cómo funciona
 
-- Todas las acciones pasan por `xcrun simctl` (`Simctl.swift`); no se usan frameworks privados.
+- Las acciones pasan por `xcrun simctl` (`Simctl.swift`); no se usan frameworks privados.
+- La galería lee la fototeca del simulador directamente de sus archivos en esta Mac (solo lectura), y los permisos
+  de notificaciones, del archivo donde iOS los guarda.
 - La columna localiza la ventana del Simulador con la lista pública de ventanas del sistema y se ordena justo encima de ella.
 - La capa de diseño usa la API de Accesibilidad para leer el rectángulo de la pantalla del dispositivo.
 
 ## Límites conocidos
 
+- La hora de la barra de estado debe ir como `9:41`; el simulador rechaza otros formatos y, curiosamente, las horas
+  en punto (`12:00`).
+
+- Eliminar fotos reconstruye la fototeca: el simulador no permite borrar una foto suelta, así que Simuru la vacía y
+  vuelve a añadir las demás. Se pierden los álbumes, favoritos y ediciones hechos dentro del simulador, y Fotos
+  vuelve a mostrar su pantalla de bienvenida.
+
 - El radio de las esquinas de la capa de diseño es aproximado.
 - Accesibilidad cubre lo que `simctl` ofrece: tamaño de texto y contraste. Negrita, reducir movimiento y VoiceOver no.
-- Si recompilas, macOS puede pedir de nuevo el permiso de Accesibilidad (la app se firma localmente).
+- Simuru pide el permiso de Accesibilidad al arrancar si no lo tiene; macOS lo aplica tras relanzar. `scripts/build.sh`
+  firma con tu certificado «Apple Development» si existe, y así el permiso sobrevive a las recompilaciones; sin
+  certificado la firma es local y macOS lo vuelve a pedir tras cada build.
 - Fuera de alcance por ahora: red, cámara y captura de pantalla o video (esto último ya lo hace el Simulador).
 
 ## Licencia

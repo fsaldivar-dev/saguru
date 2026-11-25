@@ -26,6 +26,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
     private var toast: NSPanel!
     private var toastHost: NSHostingView<ToastView>!
     private var overlay: NSPanel!
+    private var handle: NSPanel!
     private var toastText = ""
     private var timer: Timer?
     private var tick = 0
@@ -54,7 +55,12 @@ final class PanelController: NSObject, NSApplicationDelegate {
         (overlay, _) = makePanel(OverlayView(model: model))
         // The design overlay is only ever drawn over the Simulator: it never takes its clicks.
         overlay.ignoresMouseEvents = true
+        (handle, _) = makePanel(SplitHandle(model: model))
+        // Developer builds lose the Accessibility permission whenever the signature changes, so it is
+        // asked for at every launch that does not have it. macOS applies it after a relaunch.
+        if !SimulatorAX.trusted { SimulatorAX.requestAccess() }
 
+        model.restoreInterruptedAppearances()
         model.refreshDevices()
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.step() }
         RunLoop.main.add(timer, forMode: .common)
@@ -65,18 +71,19 @@ final class PanelController: NSObject, NSApplicationDelegate {
     private func step() {
         tick += 1
         let moving = Date().timeIntervalSince(lastChange) < 1.5
-        let every = sim == nil ? 20 : (moving || model.measuring ? 1 : 6)
+        let every = sim == nil ? 20 : (moving || model.measuring || model.split != nil ? 1 : 6)
         if tick % every == 0 { follow() }
         if tick % 240 == 0 { model.refreshDevices() }
         updateToast()
     }
 
     private func follow() {
-        guard let found = Self.simulatorWindow(ignoring: [rail.windowNumber, toast.windowNumber, overlay.windowNumber]) else {
+        guard let found = Self.simulatorWindow(ignoring: [rail.windowNumber, toast.windowNumber, overlay.windowNumber, handle.windowNumber]) else {
             if sim != nil, !NSApp.isActive {
                 // Keep the rail while one of our own popovers or dialogs is in use.
                 sim = nil
-                [rail, toast, overlay].forEach { $0?.orderOut(nil) }
+                [rail, toast, overlay, handle].forEach { $0?.orderOut(nil) }
+                model.galleryOpen = false
             }
             return
         }
@@ -117,7 +124,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
         let shouldFloat = front == "com.apple.iphonesimulator" || NSApp.isActive
         if shouldFloat != floating {
             floating = shouldFloat
-            [rail, toast, overlay].forEach { $0?.level = shouldFloat ? .floating : .normal }
+            [rail, toast, overlay, handle].forEach { $0?.level = shouldFloat ? .floating : .normal }
         }
         if !rail.isVisible { rail.orderFrontRegardless() }
         if !floating, !above.contains(rail.windowNumber) { rail.order(.above, relativeTo: window.number) }
@@ -133,6 +140,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
         }
         guard model.needsOverlay, let offset = screenOffset else {
             if overlay.isVisible { overlay.orderOut(nil) }
+            if handle.isVisible { handle.orderOut(nil) }
             return
         }
         let frame = NSRect(x: window.frame.minX + offset.minX, y: window.frame.maxY - offset.minY - offset.height,
@@ -140,6 +148,18 @@ final class PanelController: NSObject, NSApplicationDelegate {
         if overlay.frame != frame { overlay.setFrame(frame, display: true) }
         if !overlay.isVisible { overlay.orderFrontRegardless() }
         if !isAbove { overlay.order(.above, relativeTo: window.number) }
+
+        if model.splitPicture != nil {
+            model.splitWidth = frame.width
+            let size = handle.frame.size
+            let spot = NSPoint(x: frame.minX + frame.width * model.splitPosition - size.width / 2,
+                               y: frame.minY + frame.height * 0.22 - size.height / 2)
+            if handle.frame.origin != spot { handle.setFrameOrigin(spot) }
+            if !handle.isVisible { handle.orderFrontRegardless() }
+            if !floating { handle.order(.above, relativeTo: overlay.windowNumber) }
+        } else if handle.isVisible {
+            handle.orderOut(nil)
+        }
 
         if model.measuring {
             let mouse = NSEvent.mouseLocation

@@ -168,7 +168,59 @@ enum Simctl {
     }
 
     static func openURL(_ udid: String, _ url: String) throws {
-        try run(["openurl", udid, url])
+        do {
+            try run(["openurl", udid, url])
+        } catch let error as SimError {
+            // simctl only gives an OSStatus; these two are the ones a person can act on.
+            if error.description.contains("-10814") {
+                let scheme = url.components(separatedBy: ":").first ?? url
+                throw SimError(description: "ninguna app de este simulador abre «\(scheme)://»")
+            }
+            if error.description.contains("code=-50") { throw SimError(description: "«\(url)» no es una URL válida") }
+            throw error
+        }
+    }
+
+    /// The doors an app declares: its URL schemes (Info.plist) and its universal-link domains (entitlements).
+    /// The routes behind them are only in the app's code, so they cannot be listed.
+    struct AppLinks: Equatable {
+        var schemes: [String] = []
+        var domains: [String] = []
+        /// Schemes that exist for sign-in callbacks or are plain web, not for navigating the app.
+        var hidden = 0
+    }
+
+    static func links(of app: SimApp) -> AppLinks {
+        guard let path = app.path else { return AppLinks() }
+        var result = AppLinks()
+        let info = NSDictionary(contentsOfFile: path + "/Info.plist")
+        let types = info?["CFBundleURLTypes"] as? [[String: Any]] ?? []
+        for scheme in types.flatMap({ $0["CFBundleURLSchemes"] as? [String] ?? [] }) {
+            let lower = scheme.lowercased()
+            if ["http", "https"].contains(lower) || lower.hasPrefix("com.googleusercontent.apps.")
+                || lower.range(of: "^fb[0-9]+$", options: .regularExpression) != nil {
+                result.hidden += 1
+            } else if !result.schemes.contains(scheme) {
+                result.schemes.append(scheme)
+            }
+        }
+        let codesign = Process()
+        codesign.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+        codesign.arguments = ["-d", "--entitlements", "-", "--xml", path]
+        let out = Pipe()
+        codesign.standardOutput = out
+        codesign.standardError = FileHandle.nullDevice
+        if (try? codesign.run()) != nil {
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            codesign.waitUntilExit()
+            let entitlements = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+            for entry in entitlements?["com.apple.developer.associated-domains"] as? [String] ?? [] where entry.hasPrefix("applinks:") {
+                // "applinks:example.com?mode=developer" -> "example.com"
+                let domain = String(entry.dropFirst("applinks:".count)).components(separatedBy: "?")[0]
+                if !domain.isEmpty, !result.domains.contains(domain) { result.domains.append(domain) }
+            }
+        }
+        return result
     }
 
     static func appearance(_ udid: String) -> String {
@@ -180,11 +232,65 @@ enum Simctl {
         try run(["ui", udid, "appearance", value])
     }
 
+    /// PNG of the device's screen as it is right now.
+    static func screenshot(_ udid: String) throws -> Data {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("simuru-\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try run(["io", udid, "screenshot", "--type=png", file.path])
+        return try Data(contentsOf: file)
+    }
+
     /// Marketing-style status bar: 9:41, full battery, full signal.
+    /// What the status bar shows while it is overridden. Every part is chosen, nothing is left as it happens to be.
+    struct StatusBar: Codable, Equatable {
+        var time = "9:41"
+        var wifiOn = true
+        var wifiBars = 3
+        /// simctl's cellular mode: active, searching, failed (no service) or notSupported (hidden).
+        var cellular = "active"
+        var cellularBars = 4
+        /// Mobile data shown next to the bars when Wi-Fi is off: 5g, 5g+, lte, 4g, 3g, or hide for none.
+        var data = "5g"
+        var batteryLevel = 100
+        var charging = false
+
+        /// The look of Apple's own marketing pictures: 9:41, full signal, full battery, not charging.
+        static let catalog = StatusBar()
+        static let cellularModes: [(id: String, name: String)] = [
+            ("active", "Con señal"), ("searching", "Buscando"), ("failed", "Sin servicio"), ("notSupported", "Oculta"),
+        ]
+        static let dataTypes: [(id: String, name: String)] = [
+            ("5g", "5G"), ("5g+", "5G+"), ("lte", "LTE"), ("4g", "4G"), ("3g", "3G"), ("hide", "Sin datos"),
+        ]
+    }
+
+    static func overrideStatusBar(_ udid: String, _ bar: StatusBar) throws {
+        // Overrides pile up, and a Wi-Fi mode left from before would keep the Wi-Fi icon on screen: start clean.
+        try run(["status_bar", udid, "clear"])
+        var arguments = ["status_bar", udid, "override",
+                         "--cellularMode", bar.cellular, "--cellularBars", "\(min(max(bar.cellularBars, 0), 4))",
+                         "--batteryState", bar.charging ? "charging" : "discharging",
+                         "--batteryLevel", "\(min(max(bar.batteryLevel, 0), 100))"]
+        if bar.wifiOn {
+            arguments += ["--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "\(min(max(bar.wifiBars, 0), 3))"]
+        } else {
+            // Wi-Fi off means no Wi-Fi flags at all: any Wi-Fi mode, even "failed", draws its icon
+            // and hides the 5G / LTE label.
+            arguments += ["--dataNetwork", bar.cellular == "active" ? bar.data : "hide"]
+        }
+        try run(arguments)
+        // The time goes on its own: the simulator rejects some values (anything that is not H:MM, and,
+        // oddly, times on the hour such as 12:00), and a rejected time would otherwise undo the rest.
+        let time = bar.time.trimmingCharacters(in: .whitespaces)
+        do {
+            try run(["status_bar", udid, "override", "--time", time.isEmpty ? "9:41" : time])
+        } catch {
+            throw SimError(description: "el simulador no acepta la hora «\(time)». Usa el formato 9:41; las horas en punto (12:00) las rechaza, prueba 12:01")
+        }
+    }
+
     static func cleanStatusBar(_ udid: String) throws {
-        try run(["status_bar", udid, "override", "--time", "9:41", "--dataNetwork", "wifi", "--wifiMode", "active",
-                 "--wifiBars", "3", "--cellularMode", "active", "--cellularBars", "4",
-                 "--batteryState", "charged", "--batteryLevel", "100"])
+        try overrideStatusBar(udid, .catalog)
     }
 
     static func resetStatusBar(_ udid: String) throws {
@@ -199,8 +305,9 @@ enum Simctl {
         try run(["location", udid, "clear"])
     }
 
-    static let privacyServices = ["all", "photos", "photos-add", "camera", "microphone", "location", "location-always",
-                                  "contacts", "calendar", "reminders", "media-library", "motion", "siri"]
+    /// The services `simctl privacy` accepts (it has none for the camera or notifications).
+    static let privacyServices = ["all", "photos", "photos-add", "microphone", "location", "location-always",
+                                  "contacts", "contacts-limited", "calendar", "reminders", "media-library", "motion", "siri"]
 
     static func privacy(_ udid: String, action: String, service: String, bundleID: String) throws {
         try run(["privacy", udid, action, service, bundleID])

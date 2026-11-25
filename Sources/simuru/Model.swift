@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Tool: String {
-    case context, push, url, location, privacy, accessibility, data, overlay, grid
+    case context, push, url, location, privacy, appearance, statusBar, accessibility, data, overlay, grid
 }
 
 struct DefaultsEntry: Identifiable, Hashable {
@@ -25,7 +25,10 @@ final class PanelModel: ObservableObject {
     /// Whether iOS will show a notification sent to `appID`.
     @Published var pushPermission = Simctl.NotificationPermission.unknown
     /// Popover currently open, if any.
-    @Published var openTool: Tool?
+    @Published var openTool: Tool? {
+        // One thing open at a time: a form replaces the gallery.
+        didSet { if openTool != nil, galleryOpen { galleryOpen = false } }
+    }
     /// Name of the button under the cursor (shown as a tooltip) and the last action's outcome.
     @Published var hint = ""
     @Published var status = ""
@@ -77,7 +80,186 @@ final class PanelModel: ObservableObject {
             DispatchQueue.main.async { if bundleID == self.appID { self.pushPermission = permission } }
         }
     }
-    var needsOverlay: Bool { (overlayImage != nil && overlayVisible) || gridOn || measuring }
+    var needsOverlay: Bool { (overlayImage != nil && overlayVisible) || gridOn || measuring || split != nil }
+
+    // Split view: a picture over one side of the screen, with a divider to drag.
+    enum Split { case appearance, design }
+    /// What is being compared with the live app, if anything.
+    @Published var split: Split?
+    /// Where the divider is, from 0 (left edge) to 1 (right edge). The picture covers the left side.
+    @Published var splitPosition = 0.5
+    /// The app in the other appearance: a still picture, since a device has one appearance at a time.
+    @Published var splitImage: NSImage?
+    /// Names of the two sides, picture first ("Oscuro", "Claro").
+    @Published var splitLabels = ("", "")
+    @Published var capturing = false
+    /// Width of the device screen on this Mac, so a drag in points becomes a fraction.
+    var splitWidth: CGFloat = 1
+    @Published var appearance = "light"
+
+    var splitPicture: NSImage? {
+        switch split {
+        case .appearance: return splitImage
+        case .design: return overlayImage
+        case nil: return nil
+        }
+    }
+
+    /// Puts back the appearance of any simulator that a previous run left switched mid-comparison.
+    func restoreInterruptedAppearances() {
+        for (key, value) in UserDefaults.standard.dictionaryRepresentation() where key.hasPrefix("restoreAppearance.") {
+            guard let appearance = value as? String else { continue }
+            let udid = String(key.dropFirst("restoreAppearance.".count))
+            UserDefaults.standard.removeObject(forKey: key)
+            DispatchQueue.global(qos: .userInitiated).async { try? Simctl.setAppearance(udid, appearance) }
+        }
+    }
+
+    func loadAppearance() {
+        guard let udid = selected else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let value = Simctl.appearance(udid)
+            DispatchQueue.main.async { if udid == self.selected, value != self.appearance { self.appearance = value } }
+        }
+    }
+
+    func setAppearance(_ value: String) {
+        appearance = value
+        // While comparing, the watcher sees the screen change and retakes the picture by itself.
+        splitQueue.async { self.liveAppearance = value }
+        perform(value == "dark" ? "Apariencia oscura" : "Apariencia clara") { try Simctl.setAppearance($0.udid, value) }
+    }
+
+    /// The live side, held still while the simulator is briefly in the other appearance, so that the
+    /// switch back and forth is not seen.
+    @Published var freezeImage: NSImage?
+
+    private let splitQueue = DispatchQueue(label: "simuru.split")
+    private var splitTimer: DispatchSourceTimer?
+    /// Whether the comparison is on. Main thread only; a retake in flight checks it before showing anything.
+    private var comparing = false
+    // Only touched on `splitQueue`:
+    private var lastLook: [UInt8]?
+    private var changed = false
+    /// The appearance the simulator is in while comparing, so it is not asked on every retake.
+    private var liveAppearance = "light"
+
+    /// Compares light and dark: shows the other appearance over the left side of the screen and keeps
+    /// it up to date as the app is used.
+    func toggleAppearanceSplit() {
+        if split == .appearance || capturing { return stopAppearanceSplit() }
+        guard requireAccessibility(), let udid = selected else { return }
+        capturing = true
+        comparing = true
+        splitQueue.async {
+            self.lastLook = nil
+            self.changed = false
+            self.liveAppearance = Simctl.appearance(udid)
+            self.retake(udid, current: try? Simctl.screenshot(udid))
+            let timer = DispatchSource.makeTimerSource(queue: self.splitQueue)
+            // A look is a screenshot, about 0.4 s of work: they run one after another, with no idle wait,
+            // so a screen that stopped moving is noticed as soon as two looks in a row agree.
+            timer.schedule(deadline: .now() + 0.05, repeating: 0.05)
+            timer.setEventHandler { [weak self] in self?.look(udid) }
+            timer.resume()
+            self.splitTimer = timer
+        }
+    }
+
+    func stopAppearanceSplit() {
+        comparing = false
+        split = nil
+        splitImage = nil
+        freezeImage = nil
+        capturing = false
+        splitQueue.async {
+            self.splitTimer?.cancel()
+            self.splitTimer = nil
+        }
+    }
+
+    /// One look at the simulator. When the screen changes and then holds still, the other side is retaken.
+    private func look(_ udid: String) {
+        guard let png = try? Simctl.screenshot(udid), let now = Self.look(png) else { return }
+        guard let last = lastLook else { lastLook = now; return }
+        if Self.differ(now, last) {
+            // Still moving (a scroll, a transition): wait for it to settle.
+            lastLook = now
+            changed = true
+        } else if changed {
+            changed = false
+            retake(udid, current: png)
+        }
+    }
+
+    /// Switches the simulator to the other appearance for a moment, photographs it and switches back.
+    private func retake(_ udid: String, current png: Data?) {
+        DispatchQueue.main.sync {
+            self.capturing = true
+            // Cover the live side with its own picture while the simulator is in the other appearance.
+            if self.comparing, self.split == .appearance { self.freezeImage = png.flatMap(NSImage.init(data:)) }
+        }
+        var picture: NSImage?
+        var names = ("", "")
+        var failure: String?
+        do {
+            let current = liveAppearance
+            let other = current == "dark" ? "light" : "dark"
+            // If Simuru dies in the next second the simulator would be left in the wrong appearance:
+            // note what to put back, so the next launch can do it.
+            UserDefaults.standard.set(current, forKey: "restoreAppearance.\(udid)")
+            defer { UserDefaults.standard.removeObject(forKey: "restoreAppearance.\(udid)") }
+            try Simctl.setAppearance(udid, other)
+            // The app animates the change; photograph it once it has settled.
+            Thread.sleep(forTimeInterval: 0.4)
+            let shot = try Simctl.screenshot(udid)
+            try Simctl.setAppearance(udid, current)
+            Thread.sleep(forTimeInterval: 0.35)
+            picture = NSImage(data: shot)
+            names = (other == "dark" ? "Oscuro" : "Claro", current == "dark" ? "Oscuro" : "Claro")
+        } catch {
+            failure = "\(error)"
+        }
+        // The next look, taken once the switch back has finished animating, becomes the baseline:
+        // only what changes from then on counts. (Comparing with a look from before the retake would
+        // mistake the tail of that animation for a change and retake again.)
+        lastLook = nil
+        changed = false
+        DispatchQueue.main.sync {
+            self.capturing = false
+            self.freezeImage = nil
+            // Stopped while this was running: leave everything off.
+            guard self.comparing else { return }
+            if let picture {
+                self.splitImage = picture
+                self.splitLabels = names
+                self.split = .appearance
+            } else {
+                self.say(failure ?? "No se pudo capturar la pantalla")
+            }
+        }
+    }
+
+    /// A tiny grey copy of a screenshot, to tell whether the screen changed. The status bar is left out:
+    /// its clock changes by itself.
+    private static func look(_ png: Data) -> [UInt8]? {
+        guard let image = NSImage(data: png)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let width = 30, height = 60
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        guard let context = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+        context.interpolationQuality = .low
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        // Rows are stored top first; drop the top 7 % (status bar).
+        return Array(pixels[(width * 4)...])
+    }
+
+    private static func differ(_ a: [UInt8], _ b: [UInt8]) -> Bool {
+        guard a.count == b.count else { return true }
+        var different = 0
+        for index in a.indices where abs(Int(a[index]) - Int(b[index])) > 10 { different += 1 }
+        return different > a.count / 200
+    }
 
     // MARK: Devices
 
@@ -93,6 +275,7 @@ final class PanelModel: ObservableObject {
 
     func select(_ udid: String?) {
         guard udid != selected else { return }
+        if split == .appearance || capturing { stopAppearanceSplit() }
         selected = udid
         cleanBar = false
         reloadApps()
@@ -179,6 +362,10 @@ final class PanelModel: ObservableObject {
         }
     }
 
+    @Published var galleryOpen = false
+    /// The gallery's contents; kept here so they survive closing and reopening its popover.
+    private(set) lazy var gallery = GalleryModel(panel: self)
+
     func pickMedia() {
         pickFiles(types: [.image, .movie], multiple: true, prompt: "Añadir a Fotos") { self.addMedia($0) }
     }
@@ -194,21 +381,105 @@ final class PanelModel: ObservableObject {
         }
     }
 
-    func openURL(_ url: String) {
-        perform("URL abierta") { try Simctl.openURL($0.udid, url) }
+    // MARK: Deep links
+
+    /// What the active app declares (schemes and domains).
+    @Published var links = Simctl.AppLinks()
+    /// Deep links saved and recently opened for the active app.
+    @Published var favoriteLinks: [String] = []
+    @Published var recentLinks: [String] = []
+
+    func loadLinks() {
+        let bundleID = appID
+        favoriteLinks = UserDefaults.standard.stringArray(forKey: "links.favorites.\(bundleID)") ?? []
+        recentLinks = UserDefaults.standard.stringArray(forKey: "links.recent.\(bundleID)") ?? []
+        guard let app else { links = Simctl.AppLinks(); return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let links = Simctl.links(of: app)
+            DispatchQueue.main.async { if bundleID == self.appID { self.links = links } }
+        }
     }
 
+    func setFavorite(_ url: String, _ on: Bool) {
+        favoriteLinks.removeAll { $0 == url }
+        if on { favoriteLinks.insert(url, at: 0) }
+        UserDefaults.standard.set(favoriteLinks, forKey: "links.favorites.\(appID)")
+    }
+
+    func forgetRecent(_ url: String) {
+        recentLinks.removeAll { $0 == url }
+        UserDefaults.standard.set(recentLinks, forKey: "links.recent.\(appID)")
+    }
+
+    func openURL(_ raw: String) {
+        let url = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+        let bundleID = appID
+        perform("Enlace abierto", then: {
+            // Only links that did open are worth remembering.
+            guard bundleID == self.appID else { return }
+            self.recentLinks.removeAll { $0 == url }
+            self.recentLinks.insert(url, at: 0)
+            self.recentLinks = Array(self.recentLinks.prefix(8))
+            UserDefaults.standard.set(self.recentLinks, forKey: "links.recent.\(bundleID)")
+        }) { try Simctl.openURL($0.udid, url) }
+    }
+
+    /// What each simulator was last told to simulate, as text. The simulator cannot be asked, so this is
+    /// only what Simuru itself set during this session.
+    @Published var simulatedLocations: [String: String] = [:]
+
     func setLocation(latitude: Double, longitude: Double) {
-        perform("Ubicación establecida") { try Simctl.setLocation($0.udid, latitude: latitude, longitude: longitude) }
+        let udid = selected
+        let text = String(format: "%.5f, %.5f", locale: Locale(identifier: "en_US_POSIX"), latitude, longitude)
+        perform("Ubicación establecida", then: { if let udid { self.simulatedLocations[udid] = text } }) {
+            try Simctl.setLocation($0.udid, latitude: latitude, longitude: longitude)
+        }
     }
 
     func clearLocation() {
-        perform("Ubicación restablecida") { try Simctl.clearLocation($0.udid) }
+        let udid = selected
+        perform("Ubicación restablecida", then: { if let udid { self.simulatedLocations[udid] = nil } }) {
+            try Simctl.clearLocation($0.udid)
+        }
     }
 
-    func privacy(action: String, service: String, bundleID: String) {
-        let done = ["grant": "Permiso concedido", "revoke": "Permiso revocado", "reset": "Permiso restablecido"][action] ?? "Hecho"
-        perform(done) { try Simctl.privacy($0.udid, action: action, service: service, bundleID: bundleID) }
+    // MARK: Permissions
+
+    /// What the active app holds right now, read from the simulator.
+    @Published var permissions: [Permission: Permission.Choice] = [:]
+
+    /// What the active app declares in its Info.plist.
+    @Published var declared = DeclaredPermissions()
+
+    func loadPermissions() {
+        guard let udid = selected, !appID.isEmpty else { permissions = [:]; declared = DeclaredPermissions(); return }
+        let bundleID = appID
+        let declared = app.map(DeclaredPermissions.init) ?? DeclaredPermissions()
+        if declared != self.declared { self.declared = declared }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let permissions = Simctl.permissions(udid, bundleID: bundleID)
+            DispatchQueue.main.async {
+                if bundleID == self.appID, permissions != self.permissions { self.permissions = permissions }
+            }
+        }
+        refreshPushPermission()
+    }
+
+    func setPermission(_ permission: Permission, to choice: Permission.Choice) {
+        let bundleID = appID
+        // Show the choice at once; the reload afterwards says what the simulator really did.
+        permissions[permission] = choice
+        perform("\(permission.name): \(permission.label(choice).lowercased())", then: { self.loadPermissions() }) { device in
+            try Simctl.setPermission(device.udid, bundleID: bundleID, permission, to: choice)
+        }
+    }
+
+    func resetPermissions() {
+        let bundleID = appID
+        perform("Permisos restablecidos", then: { self.loadPermissions() }) { device in
+            try Simctl.resetPermissions(device.udid, bundleID: bundleID)
+        }
     }
 
     // MARK: Device look
@@ -219,11 +490,46 @@ final class PanelModel: ObservableObject {
         }
     }
 
-    func toggleCleanBar() {
-        let clean = !cleanBar
-        cleanBar = clean
-        perform(clean ? "Barra de estado limpia" : "Barra de estado restaurada") { device in
-            try clean ? Simctl.cleanStatusBar(device.udid) : Simctl.resetStatusBar(device.udid)
+    /// The status bar to show while it is overridden (`cleanBar`). Remembered between launches.
+    @Published var statusBar: Simctl.StatusBar = {
+        let saved = UserDefaults.standard.data(forKey: "statusBar")
+        return saved.flatMap { try? JSONDecoder().decode(Simctl.StatusBar.self, from: $0) } ?? .catalog
+    }() {
+        // Applied from here rather than from the form, so it does not depend on the form being on screen.
+        didSet { if statusBar != oldValue { applyStatusBar() } }
+    }
+
+    private var statusBarToken = 0
+
+    /// Turning the override on or off is sent at once and is never dropped in favour of a later edit.
+    func setStatusBar(on: Bool) {
+        cleanBar = on
+        statusBarToken += 1
+        send(announce: true)
+    }
+
+    /// An edit to the chosen status bar. Sent once the edits pause, so typing the time or dragging the
+    /// battery does not send every step.
+    func applyStatusBar() {
+        UserDefaults.standard.set(try? JSONEncoder().encode(statusBar), forKey: "statusBar")
+        guard cleanBar else { return }
+        statusBarToken += 1
+        let token = statusBarToken
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            if token == self.statusBarToken, self.cleanBar { self.send(announce: false) }
+        }
+    }
+
+    private func send(announce: Bool) {
+        guard let device else { return }
+        let on = cleanBar, bar = statusBar
+        work.async {
+            do {
+                try on ? Simctl.overrideStatusBar(device.udid, bar) : Simctl.resetStatusBar(device.udid)
+                if announce { DispatchQueue.main.async { self.say(on ? "Barra de estado personalizada" : "Barra de estado restaurada") } }
+            } catch {
+                DispatchQueue.main.async { self.say("\(error)") }
+            }
         }
     }
 

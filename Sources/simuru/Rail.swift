@@ -27,10 +27,15 @@ private struct RailButton: View {
     let name: String
     var active = false
     let action: () -> Void
+    /// The gallery's own button keeps it open; every other button of the rail closes it.
+    var keepsGallery = false
     @State private var hovering = false
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            if !keepsGallery { model.galleryOpen = false }
+            action()
+        } label: {
             Image(systemName: symbol)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(active ? AnyShapeStyle(Color(nsColor: .systemBlue)) : AnyShapeStyle(.primary.opacity(hovering ? 1 : 0.82)))
@@ -91,6 +96,7 @@ private struct ContextButton: View {
     var body: some View {
         Button {
             NSApp.activate(ignoringOtherApps: true)
+            model.galleryOpen = false
             model.openTool = model.openTool == .context ? nil : .context
         } label: {
             AppBadge(app: model.app, size: 26)
@@ -122,13 +128,22 @@ struct RailView: View {
             ContextButton(model: model)
             separator
             RailPopover(model: model, tool: .push, symbol: "bell.badge", name: "Notificación push") { PushForm(model: model) }
-            RailButton(model: model, symbol: "photo.badge.plus", name: "Añadir fotos y videos") { model.pickMedia() }
-            RailPopover(model: model, tool: .url, symbol: "link", name: "Abrir URL") { URLForm(model: model) }
+            RailButton(model: model, symbol: "photo.on.rectangle.angled", name: "Galería", active: model.galleryOpen,
+                       action: {
+                           model.openTool = nil
+                           model.galleryOpen.toggle()
+                       }, keepsGallery: true)
+            .background(PersistentPopover(isPresented: $model.galleryOpen) {
+                GalleryView(model: model.gallery, panel: model)
+            })
+            RailPopover(model: model, tool: .url, symbol: "link", name: "Deep links") { URLForm(model: model) }
             RailPopover(model: model, tool: .location, symbol: "location", name: "Ubicación") { LocationForm(model: model) }
             RailPopover(model: model, tool: .privacy, symbol: "hand.raised", name: "Permisos") { PrivacyForm(model: model) }
             separator
-            RailButton(model: model, symbol: "circle.lefthalf.filled", name: "Claro / oscuro") { model.toggleAppearance() }
-            RailButton(model: model, symbol: "wand.and.stars", name: "Barra de estado limpia", active: model.cleanBar) { model.toggleCleanBar() }
+            RailPopover(model: model, tool: .appearance, symbol: "circle.lefthalf.filled", name: "Apariencia",
+                        active: model.split == .appearance) { AppearanceForm(model: model) }
+            RailPopover(model: model, tool: .statusBar, symbol: "antenna.radiowaves.left.and.right", name: "Barra de estado",
+                        active: model.cleanBar) { StatusBarForm(model: model) }
             RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: "Accesibilidad") { AccessibilityForm(model: model) }
             RailPopover(model: model, tool: .data, symbol: "externaldrive", name: "Datos de la app") { DataForm(model: model) }
             separator

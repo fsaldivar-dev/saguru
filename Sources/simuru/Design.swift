@@ -53,7 +53,25 @@ struct OverlayView: View {
                                        : min(model.screenPoints.width, model.screenPoints.height)
             let scale = geo.size.width / max(pointsWide, 1)
             ZStack(alignment: .topLeading) {
-                if let image = model.overlayImage, model.overlayVisible {
+                if let picture = model.splitPicture {
+                    // The picture covers the left of the divider; the live app shows on the right.
+                    let x = geo.size.width * model.splitPosition
+                    Image(nsImage: picture)
+                        .resizable()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .mask(alignment: .leading) { Rectangle().frame(width: x) }
+                    if let freeze = model.freezeImage {
+                        // The live side, held still while the other side is being retaken.
+                        Image(nsImage: freeze)
+                            .resizable()
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .mask(alignment: .trailing) { Rectangle().frame(width: geo.size.width - x) }
+                    }
+                    Rectangle().fill(.white)
+                        .frame(width: 2, height: geo.size.height)
+                        .shadow(color: .black.opacity(0.5), radius: 3)
+                        .offset(x: x - 1)
+                } else if let image = model.overlayImage, model.overlayVisible {
                     Image(nsImage: image)
                         .resizable()
                         .frame(width: geo.size.width, height: geo.size.height)
@@ -119,5 +137,36 @@ struct OverlayView: View {
             path.addLine(to: CGPoint(x: size.width, y: point.y * scale))
         }
         .stroke(color, lineWidth: 1)
+    }
+}
+
+/// The round handle on the split's divider. It lives in its own small window, the only part of the
+/// split that takes the mouse; everywhere else clicks still reach the app.
+struct SplitHandle: View {
+    @ObservedObject var model: PanelModel
+    @State private var start: (mouse: CGFloat, position: Double)?
+
+    var body: some View {
+        Image(systemName: "arrow.left.and.right")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 36, height: 36)
+            .background(Color(red: 0.2, green: 0.2, blue: 0.22), in: Circle())
+            .overlay(Circle().strokeBorder(.white.opacity(0.85), lineWidth: 2))
+            .shadow(color: .black.opacity(0.45), radius: 4, y: 1)
+            .padding(6)
+            .contentShape(Circle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    // The window follows the divider, so the drag is measured on the screen, not in the view.
+                    let mouse = NSEvent.mouseLocation.x
+                    let begin = start ?? (mouse, model.splitPosition)
+                    start = begin
+                    let moved = Double((mouse - begin.mouse) / max(model.splitWidth, 1))
+                    model.splitPosition = min(max(begin.position + moved, 0), 1)
+                }
+                .onEnded { _ in start = nil })
+            .help("Arrastra para comparar")
+            .accessibilityLabel("Divisor de la comparación")
     }
 }
