@@ -26,9 +26,11 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET"
 
-# The network agent: a small library that Saguru loads into an app when it launches it in the simulator.
+# The agent (network monitor and pretend camera): a small library that Saguru loads into an app when it launches it in the simulator.
 xcrun -sdk iphonesimulator clang -arch arm64 -arch x86_64 -dynamiclib -fobjc-arc -O2 -mios-simulator-version-min=15.0 \
-  -framework Foundation agent/SaguruAgent.m -o "$APP/Contents/Resources/SaguruAgent.dylib"
+  -framework Foundation -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreImage \
+  -framework UIKit -framework QuartzCore -framework CoreGraphics -framework IOSurface \
+  agent/SaguruAgent.m agent/SaguruCamera.m -o "$APP/Contents/Resources/SaguruAgent.dylib"
 
 # LSUIElement: no Dock icon, Saguru behaves as an extension of the Simulator.
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -47,6 +49,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSCameraUsageDescription</key><string>Saguru pasa la imagen de esta cámara a la app del simulador que elijas.</string>
+  <key>NSCameraUseContinuityCameraDeviceType</key><true/>
 </dict>
 </plist>
 PLIST

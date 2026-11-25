@@ -157,6 +157,7 @@ struct ToolBar: View {
             separator
             RailPopover(model: model, tool: .push, symbol: "bell.badge", name: "Notificación push") { EmptyView() }
             RailPopover(model: model, tool: .gallery, symbol: "photo.on.rectangle.angled", name: "Galería") { EmptyView() }
+            RailPopover(model: model, tool: .camera, symbol: "camera", name: "Cámara", active: model.camera.isActive) { EmptyView() }
             RailPopover(model: model, tool: .url, symbol: "link", name: "Deep links") { EmptyView() }
             RailPopover(model: model, tool: .location, symbol: "location", name: "Ubicación") { EmptyView() }
             RailPopover(model: model, tool: .privacy, symbol: "hand.raised", name: "Permisos") { EmptyView() }

@@ -50,6 +50,7 @@ struct DrawerView: View {
     private var form: some View {
         switch model.openTool {
         case .push: PushForm(model: model)
+        case .camera: CameraForm(model: model, camera: model.camera)
         case .url: URLForm(model: model)
         case .location: LocationForm(model: model)
         case .privacy: PrivacyForm(model: model)

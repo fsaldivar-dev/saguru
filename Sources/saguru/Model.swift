@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Tool: String {
-    case context, push, gallery, url, location, privacy, appearance, statusBar, accessibility, data, network, grid, colors
+    case context, push, gallery, camera, url, location, privacy, appearance, statusBar, accessibility, data, network, grid, colors
 }
 
 struct DefaultsEntry: Identifiable, Hashable {
@@ -108,6 +108,15 @@ final class PanelModel: ObservableObject {
     /// The network monitor lives in a window of its own; this is whether it is open.
     @Published var networkOpen = false
     private(set) lazy var network = NetworkModel(panel: self)
+    private(set) lazy var camera = CameraModel(panel: self)
+
+    /// What Saguru's agent is told when an app is launched with it: where to report the network, where the camera's pictures are.
+    func agentEnvironment() -> [String: String] {
+        var environment: [String: String] = [:]
+        if let folder = network.sessionFolder { environment["SAGURU_NET_FOLDER"] = folder.path }
+        if let folder = camera.agentFolder { environment["SAGURU_CAM_FOLDER"] = folder.path }
+        return environment
+    }
     @Published var axMarks: [AXMark] = []
     var simulatorWindow: CGRect?
 

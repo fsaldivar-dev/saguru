@@ -140,6 +140,8 @@ final class NetworkModel: ObservableObject {
 
     unowned let panel: PanelModel
     private var folder: URL?
+    /// Where the agent reports to, while an app is being watched.
+    var sessionFolder: URL? { folder }
     private var offset: UInt64 = 0
     private var pending = Data()
     private var timer: Timer?
@@ -184,11 +186,6 @@ final class NetworkModel: ObservableObject {
             problem = "Elige una app en el riel para ver su red."
             return
         }
-        guard let agent = Bundle.main.resourceURL?.appendingPathComponent("SaguruAgent.dylib"),
-              FileManager.default.fileExists(atPath: agent.path) else {
-            problem = "Falta SaguruAgent.dylib en Saguru.app. Vuelve a construir con scripts/build.sh."
-            return
-        }
         let bundleID = panel.appID
         loadMocksIfNeeded()
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("saguru-net/\(UUID().uuidString)")
@@ -200,27 +197,12 @@ final class NetworkModel: ObservableObject {
         publishMocks()
         problem = nil
 
+        let environment = panel.agentEnvironment()
         DispatchQueue.global(qos: .userInitiated).async {
-            let process = Simctl.process(["launch", "--terminate-running-process", udid, bundleID])
-            var environment = ProcessInfo.processInfo.environment
-            environment["SIMCTL_CHILD_DYLD_INSERT_LIBRARIES"] = agent.path
-            environment["SIMCTL_CHILD_SAGURU_NET_FOLDER"] = folder.path
-            process.environment = environment
-            let errors = Pipe()
-            process.standardOutput = Pipe()
-            process.standardError = errors
-            var failure: String?
-            do {
-                try process.run()
-                let text = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                process.waitUntilExit()
-                if process.terminationStatus != 0 { failure = text.trimmingCharacters(in: .whitespacesAndNewlines) }
-            } catch {
-                failure = "No se pudo ejecutar xcrun simctl."
-            }
+            let failure = AgentLauncher.launch(udid: udid, bundleID: bundleID, environment: environment)
             DispatchQueue.main.async {
                 if let failure {
-                    self.problem = failure.isEmpty ? "No se pudo lanzar la app." : failure
+                    self.problem = failure
                     return
                 }
                 self.watching = key

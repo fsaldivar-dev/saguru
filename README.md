@@ -26,6 +26,7 @@ El panel se abre en el **inicio**: si falta el permiso de Accesibilidad lo pide 
 |---|---|---|
 | Inyectar | Notificación push | Título, subtítulo, texto, badge, sonido y datos propios; vista JSON para editar el payload o abrir un `.apns`. Avisa antes de enviar si la app no tiene permiso de notificaciones |
 | | Galería | Panel con las fotos y videos del simulador: añadir (botón o arrastrando), seleccionar varias, exportar (botón o arrastrando a Finder) y eliminar. También se pueden soltar archivos sobre la columna |
+| | Cámara | Le da a la app una cámara, que el simulador no tiene. La fuente es una imagen (un QR, un documento), la cámara de esta Mac o un iPhone usado como cámara, en vivo y con vista previa; se cambia de fuente sin relanzar la app. Cubre el visor, los fotogramas (Vision, OCR), la lectura de QR y la foto |
 | | Deep links | Abre URLs y deep links. Muestra los esquemas y dominios que declara la app activa, y guarda favoritos e historial por app. Las rutas no se pueden leer de la app: se guardan las que uses |
 | | Ubicación | Un mapa donde eliges el punto con un clic, buscador de lugares y coordenadas editables |
 | | Permisos | Cuadrícula con los permisos que la app declara en su Info.plist y su estado real: Preguntar, Limitado (ubicación al usar la app, fotos solo añadir), Permitir o Nunca. Notificaciones se muestra pero solo la app puede pedirlo |
@@ -77,6 +78,9 @@ sonido, `thread-id`, datos propios.
   de notificaciones, del archivo donde iOS los guarda.
 - La columna localiza la ventana del Simulador con la lista pública de ventanas del sistema y se ordena justo encima de ella.
 - La capa de diseño usa la API de Accesibilidad para leer el rectángulo de la pantalla del dispositivo.
+- La cámara usa el mismo agente (`agent/SaguruCamera.m`): dentro de la app sustituye a la cámara que falta, y recibe
+  los fotogramas de Saguru por un archivo que ambos mapean en memoria. `experiments/camera/app.m` es la app mínima
+  con la que se probó cada caso.
 - El monitor de red relanza la app con una pequeña biblioteca dentro (`agent/SaguruAgent.m`, cargada con
   `DYLD_INSERT_LIBRARIES`; nada se añade a tu proyecto). Esa biblioteca ve las peticiones de `URLSession`, las
   escribe en una carpeta temporal que Saguru lee, y responde con los mocks activos. Los mocks se guardan por app en
@@ -112,7 +116,12 @@ sonido, `thread-id`, datos propios.
   WebSockets, `WKWebView` ni sockets propios. Solo captura si Saguru lanzó la app: al lanzarla desde Xcode hay que
   volver a pulsar Capturar. Un mock responde a un método y una URL sin mirar los parámetros; de cada cuerpo se
   guardan como mucho 8 MB. Las subidas por archivo o stream largo no se han probado.
-- Fuera de alcance por ahora: cámara y captura de pantalla o video (esto último ya lo hace el Simulador).
+- La cámara sirve para apps que la manejan ellas mismas con `AVCaptureSession`. Las pantallas de cámara de Apple
+  (escáner de documentos de VisionKit, `UIImagePickerController`, `DataScanner`) no están cubiertas, y una app que
+  abra el escáner de documentos con la cámara activa se cierra. Solo se detectan códigos QR, no otros códigos de
+  barras. No hay video grabado, cámara frontal y trasera distintas, zoom, linterna, enfoque ni profundidad. Android
+  como fuente no está hecho. La app solo recibe la cámara si Saguru la lanzó.
+- Fuera de alcance por ahora: captura de pantalla o video (ya lo hace el Simulador).
 
 ## Licencia
 
