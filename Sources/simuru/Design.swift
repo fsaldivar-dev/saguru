@@ -1,0 +1,123 @@
+import AppKit
+import ApplicationServices
+import SwiftUI
+
+/// Reads the Simulator's window through the Accessibility API. Only the design tools need it:
+/// it is the one way to learn exactly where the device screen sits inside the window.
+enum SimulatorAX {
+    static var trusted: Bool { AXIsProcessTrusted() }
+
+    static func requestAccess() {
+        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
+    }
+
+    private static func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {
+        var value: AnyObject?
+        AXUIElementCopyAttributeValue(element, name as CFString, &value)
+        return value
+    }
+
+    private static func frame(_ element: AXUIElement) -> CGRect? {
+        guard let position = attribute(element, kAXPositionAttribute), let size = attribute(element, kAXSizeAttribute) else { return nil }
+        var origin = CGPoint.zero, extent = CGSize.zero
+        AXValueGetValue(position as! AXValue, .cgPoint, &origin)
+        AXValueGetValue(size as! AXValue, .cgSize, &extent)
+        return CGRect(origin: origin, size: extent)
+    }
+
+    /// Title and device-screen rectangle (top-left screen coordinates) of the Simulator window at `windowFrame`.
+    static func window(at windowFrame: CGRect) -> (title: String, screen: CGRect?)? {
+        guard trusted, let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.iphonesimulator").first
+        else { return nil }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        for window in (attribute(root, kAXWindowsAttribute) as? [AXUIElement]) ?? [] {
+            guard let frame = frame(window), abs(frame.minX - windowFrame.minX) < 3, abs(frame.minY - windowFrame.minY) < 3,
+                  abs(frame.width - windowFrame.width) < 3 else { continue }
+            let children = (attribute(window, kAXChildrenAttribute) as? [AXUIElement]) ?? []
+            let content = children.first { (attribute($0, kAXSubroleAttribute) as? String) == "iOSContentGroup" }
+            return ((attribute(window, kAXTitleAttribute) as? String) ?? "", content.flatMap(Self.frame))
+        }
+        return nil
+    }
+}
+
+/// Drawn exactly over the device screen: the design image, the grid and the rulers.
+struct OverlayView: View {
+    @ObservedObject var model: PanelModel
+
+    var body: some View {
+        GeometryReader { geo in
+            let landscape = geo.size.width > geo.size.height
+            let pointsWide = landscape ? max(model.screenPoints.width, model.screenPoints.height)
+                                       : min(model.screenPoints.width, model.screenPoints.height)
+            let scale = geo.size.width / max(pointsWide, 1)
+            ZStack(alignment: .topLeading) {
+                if let image = model.overlayImage, model.overlayVisible {
+                    Image(nsImage: image)
+                        .resizable()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .opacity(model.overlayOpacity)
+                }
+                if model.gridOn {
+                    Canvas { context, size in
+                        let step = model.gridSpacing * scale
+                        guard step >= 2 else { return }
+                        var path = Path()
+                        var x = step
+                        while x < size.width { path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height)); x += step }
+                        var y = step
+                        while y < size.height { path.move(to: CGPoint(x: 0, y: y)); path.addLine(to: CGPoint(x: size.width, y: y)); y += step }
+                        context.stroke(path, with: .color(.red.opacity(0.45)), lineWidth: 0.5)
+                    }
+                }
+                if model.measuring {
+                    rulers(size: geo.size, scale: scale)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius(geo.size), style: .continuous))
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Approximates the display's rounded corners, which the device profile does not publish:
+    /// edge-to-edge phones are tall and very round, iPads slightly round, home-button phones square.
+    private func cornerRadius(_ size: CGSize) -> CGFloat {
+        let short = min(size.width, size.height), long = max(size.width, size.height)
+        let ratio = long / max(short, 1)
+        return ratio > 2 ? short * 0.15 : (ratio < 1.6 ? short * 0.025 : 0)
+    }
+
+    @ViewBuilder
+    private func rulers(size: CGSize, scale: CGFloat) -> some View {
+        ForEach(Array(model.guides.enumerated()), id: \.offset) { _, guide in
+            crosshair(at: guide, size: size, scale: scale, color: .orange.opacity(0.9))
+        }
+        if let cursor = model.cursor {
+            crosshair(at: cursor, size: size, scale: scale, color: Color(nsColor: .systemBlue))
+            let last = model.guides.last
+            let label = last.map { "\(Int(cursor.x)), \(Int(cursor.y))   Δ \(Int(abs(cursor.x - $0.x))) × \(Int(abs(cursor.y - $0.y)))" }
+                ?? "\(Int(cursor.x)), \(Int(cursor.y))"
+            Text(label)
+                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 5))
+                .foregroundStyle(.white)
+                .fixedSize()
+                .position(x: min(max(cursor.x * scale + 70, 76), size.width - 76),
+                          y: min(max(cursor.y * scale - 18, 12), size.height - 12))
+        }
+    }
+
+    private func crosshair(at point: CGPoint, size: CGSize, scale: CGFloat, color: Color) -> some View {
+        Path { path in
+            path.move(to: CGPoint(x: point.x * scale, y: 0))
+            path.addLine(to: CGPoint(x: point.x * scale, y: size.height))
+            path.move(to: CGPoint(x: 0, y: point.y * scale))
+            path.addLine(to: CGPoint(x: size.width, y: point.y * scale))
+        }
+        .stroke(color, lineWidth: 1)
+    }
+}
