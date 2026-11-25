@@ -51,14 +51,18 @@ struct CameraDevice: Identifiable, Hashable {
     let id: String
     let name: String
     let isPhone: Bool
+    /// An Android phone reached through adb rather than a camera macOS lists.
+    var isAndroid = false
 }
 
 final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-    enum Source: Hashable { case image, device(String) }
+    enum Source: Hashable { case image, device(String), android(String) }
     enum Framing: String, CaseIterable { case portrait = "Vertical", original = "Original" }
 
     @Published var source = Source.image { didSet { if source != oldValue { restart() } } }
     @Published var framing = Framing.portrait { didSet { if framing != oldValue { renderImage() } } }
+    /// Quarter turns to the right, for sources that arrive lying on their side.
+    @Published var turns = 0 { didSet { if turns != oldValue { renderImage() } } }
     @Published var devices: [CameraDevice] = []
     @Published var preview: CGImage?
     @Published var imageURL: URL? { didSet { renderImage() } }
@@ -70,6 +74,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     unowned let panel: PanelModel
     private(set) var channel: FrameChannel?
     private var session: AVCaptureSession?
+    private var android: AndroidCamera?
     private let queue = DispatchQueue(label: "saguru.camera")
     private let context = CIContext()
     private var frames = 0
@@ -95,6 +100,13 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
                                                      mediaType: .video, position: .unspecified).devices
         devices = found.map { CameraDevice(id: $0.uniqueID, name: $0.localizedName, isPhone: $0.deviceType == .continuityCamera || $0.modelID.hasPrefix("iPhone")) }
         if case .device(let id) = source, !devices.contains(where: { $0.id == id }) { source = .image }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let phones = ADB.phones().map { CameraDevice(id: $0.serial, name: $0.name, isPhone: true, isAndroid: true) }
+            DispatchQueue.main.async {
+                self.devices = self.devices.filter { !$0.isAndroid } + phones
+                if case .android(let serial) = self.source, !phones.contains(where: { $0.id == serial }) { self.source = .image }
+            }
+        }
     }
 
     private func ensureChannel() -> FrameChannel? {
@@ -135,10 +147,22 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
 
     /// Runs the Mac's capture only while someone is looking: the panel, or an app using the camera.
     private func restart() {
-        let wanted: String? = { if case .device(let id) = source, visible || active != nil { return id } else { return nil } }()
+        let looking = visible || active != nil
+        let wanted: String? = { if case .device(let id) = source, looking { return id } else { return nil } }()
+        let phone: String? = { if case .android(let serial) = source, looking { return serial } else { return nil } }()
         queue.async {
             self.session?.stopRunning()
             self.session = nil
+            self.android?.stop()
+            self.android = nil
+            if let phone {
+                let camera = AndroidCamera(serial: phone, queue: self.queue)
+                camera.onFrame = { [weak self] pixels in self?.send(CIImage(cvPixelBuffer: pixels)) }
+                camera.onProblem = { [weak self] message in DispatchQueue.main.async { self?.problem = message } }
+                self.android = camera
+                camera.start()
+                return
+            }
             guard let wanted else { return }
             guard let device = AVCaptureDevice(uniqueID: wanted), let input = try? AVCaptureDeviceInput(device: device) else {
                 DispatchQueue.main.async { self.problem = "No se pudo abrir esa cámara." }
@@ -157,10 +181,12 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
             self.session = session
             session.startRunning()
         }
-        if wanted == nil { renderImage() }
+        if wanted == nil, phone == nil { renderImage() }
     }
 
     func choose(_ device: CameraDevice) {
+        problem = nil
+        if device.isAndroid { source = .android(device.id); return }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             source = .device(device.id)
@@ -206,7 +232,10 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
 
     /// Crops and scales a picture to what the app will get, publishes it to the agent and to the panel.
     private func send(_ image: CIImage) {
-        var picture = image.transformed(by: CGAffineTransform(translationX: -image.extent.minX, y: -image.extent.minY))
+        var picture = image
+        let orientations: [CGImagePropertyOrientation] = [.up, .right, .down, .left]
+        if turns % 4 != 0 { picture = picture.oriented(orientations[turns % 4]) }
+        picture = picture.transformed(by: CGAffineTransform(translationX: -picture.extent.minX, y: -picture.extent.minY))
         if framing == .portrait, picture.extent.width > picture.extent.height {
             // A phone is held upright: keep the middle of a landscape picture, three wide by four tall.
             let width = (picture.extent.height * 3 / 4).rounded()
@@ -275,8 +304,9 @@ struct CameraForm: View {
                                 if camera.imageURL == nil { camera.pickImage() } else { camera.source = .image }
                             }
                             ForEach(camera.devices) { device in
-                                row(device.name, detail: device.isPhone ? "iPhone como cámara" : "Cámara de esta Mac",
-                                    symbol: device.isPhone ? "iphone" : "web.camera", chosen: camera.source == .device(device.id)) { camera.choose(device) }
+                                row(device.name, detail: device.isAndroid ? "Android por USB" : (device.isPhone ? "iPhone como cámara" : "Cámara de esta Mac"),
+                                    symbol: device.isAndroid ? "smartphone" : (device.isPhone ? "iphone" : "web.camera"),
+                                    chosen: camera.source == (device.isAndroid ? .android(device.id) : .device(device.id))) { camera.choose(device) }
                             }
                         }
                         if camera.source == .image { Button("Elegir otra imagen…") { camera.pickImage() }.controlSize(.small) }
@@ -286,6 +316,8 @@ struct CameraForm: View {
                             ForEach(CameraModel.Framing.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                         }
                         .pickerStyle(.segmented).labelsHidden()
+                        Button { camera.turns = (camera.turns + 1) % 4 } label: { Label("Girar", systemImage: "rotate.right") }
+                            .controlSize(.small)
                     }
                     Divider()
                     if camera.isActive {

@@ -24,7 +24,7 @@ static NSHashTable *gSessions, *gLayers;
 static dispatch_queue_t gFeed, gDetect;
 static dispatch_source_t gTimer;
 static CIContext *gContext;
-static char kInputs, kOutputs, kRunning, kTypes, kSub;
+static char kInputs, kOutputs, kRunning, kTypes, kSub, kBusy;
 
 // MARK: Pretend objects (never initialised the normal way: created bare and answered by these overrides)
 
@@ -157,9 +157,13 @@ static void Tick(void) {
             if ([output isKindOfClass:AVCaptureVideoDataOutput.class]) {
                 AVCaptureVideoDataOutput *video = (id)output; id delegate = video.sampleBufferDelegate;
                 if (!delegate || !sample) continue;
+                // Like a real camera, a frame is dropped while the app is still busy with the previous one.
+                if ([objc_getAssociatedObject(video, &kBusy) boolValue]) continue;
+                objc_setAssociatedObject(video, &kBusy, @YES, OBJC_ASSOCIATION_RETAIN);
                 CFRetain(sample);
                 dispatch_async(video.sampleBufferCallbackQueue ?: dispatch_get_main_queue(), ^{
-                    [delegate captureOutput:video didOutputSampleBuffer:sample fromConnection:(id)nil]; CFRelease(sample); });
+                    [delegate captureOutput:video didOutputSampleBuffer:sample fromConnection:(id)nil]; CFRelease(sample);
+                    objc_setAssociatedObject(video, &kBusy, @NO, OBJC_ASSOCIATION_RETAIN); });
             } else if ([output isKindOfClass:AVCaptureMetadataOutput.class] && count % 10 == 0 && gCodes.count) {
                 AVCaptureMetadataOutput *meta = (id)output; id delegate = meta.metadataObjectsDelegate;
                 NSArray *types = objc_getAssociatedObject(meta, &kTypes);

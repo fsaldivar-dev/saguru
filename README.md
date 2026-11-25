@@ -26,7 +26,7 @@ El panel se abre en el **inicio**: si falta el permiso de Accesibilidad lo pide 
 |---|---|---|
 | Inyectar | Notificación push | Título, subtítulo, texto, badge, sonido y datos propios; vista JSON para editar el payload o abrir un `.apns`. Avisa antes de enviar si la app no tiene permiso de notificaciones |
 | | Galería | Panel con las fotos y videos del simulador: añadir (botón o arrastrando), seleccionar varias, exportar (botón o arrastrando a Finder) y eliminar. También se pueden soltar archivos sobre la columna |
-| | Cámara | Le da a la app una cámara, que el simulador no tiene. La fuente es una imagen (un QR, un documento), la cámara de esta Mac o un iPhone usado como cámara, en vivo y con vista previa; se cambia de fuente sin relanzar la app. Cubre el visor, los fotogramas (Vision, OCR), la lectura de QR y la foto |
+| | Cámara | Le da a la app una cámara, que el simulador no tiene. La fuente es una imagen (un QR, un documento), la cámara de esta Mac, un iPhone usado como cámara o un Android por USB, en vivo y con vista previa, con encuadre vertical y giro; se cambia de fuente sin relanzar la app. Cubre el visor, los fotogramas (Vision, OCR), la lectura de QR y la foto |
 | | Deep links | Abre URLs y deep links. Muestra los esquemas y dominios que declara la app activa, y guarda favoritos e historial por app. Las rutas no se pueden leer de la app: se guardan las que uses |
 | | Ubicación | Un mapa donde eliges el punto con un clic, buscador de lugares y coordenadas editables |
 | | Permisos | Cuadrícula con los permisos que la app declara en su Info.plist y su estado real: Preguntar, Limitado (ubicación al usar la app, fotos solo añadir), Permitir o Nunca. Notificaciones se muestra pero solo la app puede pedirlo |
@@ -119,8 +119,9 @@ sonido, `thread-id`, datos propios.
 - La cámara sirve para apps que la manejan ellas mismas con `AVCaptureSession`. Las pantallas de cámara de Apple
   (escáner de documentos de VisionKit, `UIImagePickerController`, `DataScanner`) no están cubiertas, y una app que
   abra el escáner de documentos con la cámara activa se cierra. Solo se detectan códigos QR, no otros códigos de
-  barras. No hay video grabado, cámara frontal y trasera distintas, zoom, linterna, enfoque ni profundidad. Android
-  como fuente no está hecho. La app solo recibe la cámara si Saguru la lanzó.
+  barras. No hay video grabado, cámara frontal y trasera distintas, zoom, linterna, enfoque ni profundidad. Un
+  Android como fuente necesita `scrcpy` instalado en la Mac (`brew install scrcpy`), depuración USB y Android 12 o
+  posterior; usa su cámara trasera. La app solo recibe la cámara si Saguru la lanzó.
 - Fuera de alcance por ahora: captura de pantalla o video (ya lo hace el Simulador).
 
 ## Licencia
