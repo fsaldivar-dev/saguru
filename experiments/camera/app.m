@@ -6,12 +6,12 @@
 @property UILabel *l1, *l2, *l3, *l4, *l5; @property NSInteger frames; @property UIImageView *shot;
 @end
 @implementation VC
-- (UILabel *)label { UILabel *l = [UILabel new]; l.numberOfLines = 3; l.font = [UIFont monospacedSystemFontOfSize:12 weight:UIFontWeightRegular]; l.text = @"-"; return l; }
+- (UILabel *)label { UILabel *l = [UILabel new]; l.numberOfLines = 3; l.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium]; l.text = @"-"; return l; }
 - (void)viewDidLoad {
     [super viewDidLoad]; self.view.backgroundColor = UIColor.systemBackgroundColor;
-    UIView *pv = [UIView new]; pv.backgroundColor = UIColor.blackColor; [pv.heightAnchor constraintEqualToConstant:300].active = YES;
+    UIView *pv = [UIView new]; pv.backgroundColor = UIColor.blackColor; [pv.heightAnchor constraintEqualToConstant:330].active = YES;
     self.l1 = [self label]; self.l2 = [self label]; self.l3 = [self label]; self.l4 = [self label]; self.l5 = [self label];
-    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem]; [b setTitle:@"Foto" forState:UIControlStateNormal]; [b addTarget:self action:@selector(take) forControlEvents:UIControlEventTouchUpInside];
+    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem]; [b setTitle:@"Tomar foto" forState:UIControlStateNormal]; b.titleLabel.font = [UIFont boldSystemFontOfSize:18]; [b addTarget:self action:@selector(take) forControlEvents:UIControlEventTouchUpInside];
     self.shot = [UIImageView new]; self.shot.contentMode = UIViewContentModeScaleAspectFit; [self.shot.heightAnchor constraintEqualToConstant:90].active = YES;
     UIStackView *s = [[UIStackView alloc] initWithArrangedSubviews:@[pv, self.l1, self.l2, self.l3, self.l4, b, self.l5, self.shot]];
     s.axis = UILayoutConstraintAxisVertical; s.spacing = 8; s.translatesAutoresizingMaskIntoConstraints = NO; [self.view addSubview:s];
@@ -21,7 +21,7 @@
 }
 - (void)start:(UIView *)pv ok:(BOOL)ok {
     AVCaptureDevice *d = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    self.l1.text = [NSString stringWithFormat:@"1 dispositivo: %@ (permiso %d)", d.localizedName ?: @"NINGUNO", ok];
+    self.l1.text = [NSString stringWithFormat:@"Cámara: %@", d.localizedName ?: @"ninguna"];
     if (!d) return;
     NSError *e; AVCaptureDeviceInput *in = [AVCaptureDeviceInput deviceInputWithDevice:d error:&e];
     self.session = [AVCaptureSession new]; [self.session beginConfiguration];
@@ -33,11 +33,11 @@
     if ([self.session canAddOutput:v]) [self.session addOutput:v];
     AVCaptureMetadataOutput *m = [AVCaptureMetadataOutput new];
     if ([self.session canAddOutput:m]) { [self.session addOutput:m]; [m setMetadataObjectsDelegate:self queue:dispatch_get_main_queue()];
-        if ([m.availableMetadataObjectTypes containsObject:AVMetadataObjectTypeQRCode]) m.metadataObjectTypes = @[AVMetadataObjectTypeQRCode]; else self.l3.text = @"3 metadata: QR no disponible"; }
+        if ([m.availableMetadataObjectTypes containsObject:AVMetadataObjectTypeQRCode]) m.metadataObjectTypes = @[AVMetadataObjectTypeQRCode]; else self.l3.text = @"QR: no disponible"; }
     self.photo = [AVCapturePhotoOutput new]; if ([self.session canAddOutput:self.photo]) [self.session addOutput:self.photo];
     [self.session commitConfiguration];
     self.preview = [AVCaptureVideoPreviewLayer layerWithSession:self.session]; self.preview.videoGravity = AVLayerVideoGravityResizeAspectFill;
-    self.preview.frame = CGRectMake(0, 0, self.view.bounds.size.width - 28, 300); [pv.layer addSublayer:self.preview];
+    self.preview.frame = CGRectMake(0, 0, self.view.bounds.size.width - 28, 330); [pv.layer addSublayer:self.preview];
     dispatch_async(dispatch_get_global_queue(0, 0), ^{ [self.session startRunning]; });
 }
 - (void)captureOutput:(AVCaptureOutput *)o didOutputSampleBuffer:(CMSampleBufferRef)sb fromConnection:(AVCaptureConnection *)c {
@@ -52,19 +52,19 @@
         NSString *text = [[(VNRecognizedTextObservation *)t.results.firstObject topCandidates:1].firstObject string] ?: te.localizedDescription;
         NSString *p = [(VNBarcodeObservation *)r.results.firstObject payloadStringValue];
         dispatch_async(dispatch_get_main_queue(), ^{
-            self.l2.text = [NSString stringWithFormat:@"2 fotogramas: %ld (%zux%zu)", (long)n, w, h];
-            self.l4.text = [NSString stringWithFormat:@"4 Vision QR(%@): %@ | texto: %@", how, p ?: (e.localizedDescription ?: @"nada"), text]; });
+            self.l2.text = [NSString stringWithFormat:@"Fotogramas: %ld · %zu×%zu", (long)n, w, h];
+            self.l4.text = [NSString stringWithFormat:@"Vision · código: %@\nVision · texto: %@", p ?: @"—", text ?: @"—"]; });
     }
 }
 - (void)captureOutput:(AVCaptureOutput *)o didOutputMetadataObjects:(NSArray<__kindof AVMetadataObject *> *)objs fromConnection:(AVCaptureConnection *)c {
     AVMetadataMachineReadableCodeObject *q = objs.firstObject;
     AVMetadataObject *t = [self.preview transformedMetadataObjectForMetadataObject:q];
-    self.l3.text = [NSString stringWithFormat:@"3 metadata: %@ en %@", q.stringValue, NSStringFromCGRect(t.bounds)];
+    self.l3.text = [NSString stringWithFormat:@"QR leído: %@", q.stringValue];
 }
-- (void)take { self.l5.text = @"5 foto: pidiendo…"; [self.photo capturePhotoWithSettings:[AVCapturePhotoSettings photoSettings] delegate:self]; }
+- (void)take { self.l5.text = @"Foto: pidiendo…"; [self.photo capturePhotoWithSettings:[AVCapturePhotoSettings photoSettings] delegate:self]; }
 - (void)captureOutput:(AVCapturePhotoOutput *)o didFinishProcessingPhoto:(AVCapturePhoto *)p error:(NSError *)e {
     NSData *d = p.fileDataRepresentation; UIImage *i = d ? [UIImage imageWithData:d] : nil;
-    self.l5.text = [NSString stringWithFormat:@"5 foto: %lu bytes %@ %@", (unsigned long)d.length, NSStringFromCGSize(i.size), e.localizedDescription ?: @""]; self.shot.image = i;
+    self.l5.text = [NSString stringWithFormat:@"Foto: %.0f×%.0f · %lu KB", i.size.width, i.size.height, (unsigned long)d.length / 1024]; self.shot.image = i;
 }
 @end
 @interface AD : UIResponder <UIApplicationDelegate> @property (nonatomic, strong) UIWindow *window; @end

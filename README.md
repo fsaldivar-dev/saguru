@@ -1,47 +1,115 @@
-# Saguru
+<p align="center">
+  <img src="assets/banner.png" alt="Saguru: superpoderes para el Simulador de iOS" width="100%">
+</p>
 
-Superpoderes para el Simulador de iOS: una columna de acciones que se pega a su ventana y un CLI con las mismas acciones. Gratis, abierto y sin instalar nada dentro de tu app.
+<p align="center">
+  <b>Mira la red de tu app, dale una cámara, mándale notificaciones y mídela al píxel.</b><br>
+  Todo desde un panel pegado al Simulador de iOS. Sin proxy, sin certificados y sin tocar tu proyecto.
+</p>
+
+<p align="center">
+  macOS 14+ · Xcode · Licencia MIT · Gratis y abierto
+</p>
+
+---
+
+**Saguru** (探る, «sondear») es un panel que se acopla a la ventana del Simulador de iOS y un CLI con las mismas
+acciones. Reúne en un solo sitio lo que normalmente pide varias herramientas, un proxy con certificados o un
+dispositivo real.
+
+<p align="center">
+  <img src="assets/red.gif" alt="Saguru se despliega junto al Simulador y captura las peticiones de la app" width="900">
+</p>
+
+## Por qué Saguru
+
+- **No toca tu app.** No hay SDK que integrar ni código que añadir. Lo que necesita estar dentro de la app (red y
+  cámara) se carga solo cuando Saguru la lanza, y solo en el simulador.
+- **Sin proxy ni certificados.** La red se ve desde dentro de la app, así que el HTTPS se lee tal cual, sin instalar
+  un certificado raíz ni configurar el sistema.
+- **Una cámara donde no la hay.** El simulador no tiene cámara. Saguru le da una a tu app, con la imagen que tú
+  elijas: un QR, un documento, la cámara de tu Mac, tu iPhone o un Android.
+- **Vive donde trabajas.** Un botón `»` junto al Simulador. Lo despliegas cuando lo necesitas y lo pliegas cuando no.
+- **También es un CLI.** Las acciones sirven para scripts y para integración continua.
 
 ## Instalar
 
 ```bash
+git clone https://github.com/fsaldivar-dev/saguru.git
+cd saguru
 scripts/build.sh --install
-```
-
-Crea `build/Saguru.app` y enlaza el comando `saguru` en `/usr/local/bin` o `~/.local/bin`. Requiere macOS 14+ y Xcode.
-
-## El panel
-
-```bash
 saguru
 ```
 
-Junto al Simulador aparece un botón `»`, sobre un marco que lo rodea. Lo sigue al moverlo y se oculta cuando el Simulador no está a la vista. No tiene icono en el Dock; se cierra con `saguru quit` o desde el menú `…` del panel.
+Crea `build/Saguru.app` y enlaza el comando `saguru` en `/usr/local/bin` o `~/.local/bin`. Requiere macOS 14 o
+posterior y Xcode. Al abrirlo aparece un `»` junto al Simulador; no tiene icono en el Dock y se cierra con
+`saguru quit` o desde el menú `…` del panel.
 
-`»` despliega un **panel acoplado**, tan alto como el Simulador, con las herramientas en una fila arriba; `«` lo pliega. La red también puede soltarse a una ventana aparte.
+## Qué hace
 
-El panel se abre en el **inicio**: si falta el permiso de Accesibilidad lo pide ahí, y es donde se elige la **app activa** (simulador y app, con buscador), que vale para todo lo que depende de una app: notificaciones, permisos, datos y red. Se recuerda por simulador. Al lado muestra su ficha: versión, número de compilación, iOS mínimo, cuándo se compiló, SDK, tamaño y esquemas de URL.
+### Red: mira y sustituye lo que tu app le pide al servidor
 
-| Grupo | Botón | Qué hace |
+Cada petición con su método, estado, tiempo y tamaño. Petición y respuesta lado a lado, con cabeceras, parámetros
+y cuerpo: JSON coloreado y con números de línea, texto, imágenes y binarios. Vista del mensaje HTTP crudo, filtro de
+líneas y «Copiar cURL».
+
+Con **Crear mock**, una petición capturada se convierte en una respuesta guardada. Se edita como un único documento
+HTTP, con autocompletado de códigos de estado y cabeceras, y se aplica en la siguiente petición sin relanzar.
+
+<p align="center">
+  <img src="assets/mock.gif" alt="Se crea un mock desde una petición, se cambia el estado a 503 y la app lo recibe" width="900">
+</p>
+
+### Cámara: lo que el simulador no tiene
+
+Elige una imagen, la cámara de tu Mac, un iPhone o un Android por USB, y tu app la ve como si fuera su cámara: visor
+en vivo, fotogramas para Vision y OCR, lectura de QR, foto, cámara frontal y trasera, y la pantalla de cámara del
+sistema. Cambiar de fuente no requiere relanzar la app.
+
+<p align="center">
+  <img src="assets/camara.gif" alt="La app del simulador recibe una cámara, lee un QR y toma una foto" width="820">
+</p>
+
+De paso, Saguru hace que Vision lea códigos de barras en el simulador, donde por defecto no devuelve nada.
+
+### Todo lo demás, en el mismo panel
+
+<p align="center">
+  <img src="assets/recorrido.gif" alt="Recorrido por notificaciones, galería, ubicación, apariencia, barra de estado y accesibilidad" width="820">
+</p>
+
+| | Herramienta | Qué hace |
 |---|---|---|
-| Inyectar | Notificación push | Título, subtítulo, texto, badge, sonido y datos propios; vista JSON para editar el payload o abrir un `.apns`. Avisa antes de enviar si la app no tiene permiso de notificaciones |
-| | Galería | Panel con las fotos y videos del simulador: añadir (botón o arrastrando), seleccionar varias, exportar (botón o arrastrando a Finder) y eliminar. También se pueden soltar archivos sobre la columna |
-| | Cámara | Le da a la app una cámara, que el simulador no tiene. La fuente es una imagen (un QR, un documento), la cámara de esta Mac, un iPhone usado como cámara o un Android por USB, en vivo y con vista previa, con encuadre vertical y giro; se cambia de fuente sin relanzar la app. Cubre el visor, los fotogramas (Vision, OCR), la lectura de QR, la foto, las cámaras frontal y trasera y la pantalla de cámara del sistema |
-| | Deep links | Abre URLs y deep links. Muestra los esquemas y dominios que declara la app activa, y guarda favoritos e historial por app. Las rutas no se pueden leer de la app: se guardan las que uses |
-| | Ubicación | Un mapa donde eliges el punto con un clic, buscador de lugares y coordenadas editables |
-| | Permisos | Cuadrícula con los permisos que la app declara en su Info.plist y su estado real: Preguntar, Limitado (ubicación al usar la app, fotos solo añadir), Permitir o Nunca. Notificaciones se muestra pero solo la app puede pedirlo |
-| Dispositivo | Apariencia | Claro u oscuro, y «Comparar»: la otra apariencia sobre media pantalla, con un tirador para deslizar. Un lado es la app en vivo; el otro es una foto que se vuelve a tomar sola, unos segundos después de que la pantalla cambie y se quede quieta |
-| | Barra de estado | Eliges cada parte: hora, Wi-Fi (conectado o apagado, e intensidad), red celular (con señal, buscando, sin servicio u oculta; barras y tipo de datos: 5G, LTE, 4G, 3G) y batería. «Valores de catálogo» pone 9:41, señal completa y batería llena |
-| | Accesibilidad | **Navegador**: numera los elementos sobre la pantalla en el orden de VoiceOver; ↑ ↓ los recorren, ← → cambian el rotor e Intro activa el elemento. **Árbol**: roles, etiquetas e identificadores (copiables), con resaltado. **Auditoría**: controles sin etiqueta, objetivos táctiles pequeños, contraste bajo, etiquetas e identificadores repetidos, con puntuación. **Ajustes**: animaciones lentas, tamaño de texto, aumentar contraste, texto en negrita, reducir transparencia, reducir movimiento, invertir colores, formas de botón, etiquetas de encendido y diferenciar sin color |
-| | Datos de la app | **Preferencias**: los User Defaults en una tabla, editables. **Bases de datos**: las SQLite de la app (Core Data, SwiftData…), sus tablas y un editor de consultas de solo lectura; el resultado se copia como tabla. **Archivos**: el contenedor con tamaños. **Acciones**: abrir carpeta, borrar datos, reiniciar en otro idioma |
-| | Red | Cada petición que hace la app: URL, método, estado, tiempo y tamaño; cabeceras, parámetros y cuerpos de petición y respuesta (JSON con formato, texto, imagen o binario, que se puede guardar); copiar como cURL. **Crear mock** convierte una petición capturada en una respuesta guardada, editable (estado, cabeceras, cuerpo, espera) y con interruptor. Sin proxy ni certificados |
-| Diseño | Cuadrícula | Rejilla de 2, 4, 8 o 16 pt y columnas de maquetación, con medidas por jerarquía como en una herramienta de diseño: detecta los contenedores (tarjetas, barras, chips), mide cada caja contra la de al lado o contra la pared de su contenedor, y se puede entrar en un contenedor para medir lo de dentro. Verde si las medidas son múltiplos del paso, naranja si no |
-| | Reglas | Coordenadas del cursor; ⌥ fija una guía y mide la distancia. No captura clics: la app sigue usable |
-| | Colores | Paleta de la pantalla (colores en uso y cuánto ocupan), los colores con nombre del catálogo de la app, y un cuentagotas. Un clic copia el color como `Color` de SwiftUI |
+| Inyectar | **Notificación push** | Título, subtítulo, texto, badge, sonido y datos propios, con vista previa del aviso y el payload en vivo. Vista JSON para editarlo o abrir un `.apns`. Avisa antes de enviar si la app no tiene permiso |
+| | **Galería** | Las fotos y videos del simulador: añadir (botón o arrastrando), seleccionar varias, exportar a Finder y eliminar |
+| | **Deep links** | Abre URLs y deep links. Muestra los esquemas y dominios que declara la app, y guarda favoritos e historial por app |
+| | **Ubicación** | Un mapa donde eliges el punto con un clic, buscador de lugares y coordenadas editables |
+| | **Permisos** | Los permisos que la app declara y su estado real, en una cuadrícula: Preguntar, Limitado, Permitir o Nunca |
+| Dispositivo | **Apariencia** | Claro u oscuro, y «Comparar»: las dos apariencias a la vez con un tirador para deslizar |
+| | **Barra de estado** | Hora, Wi‑Fi, red celular, tipo de datos y batería, con vista previa. «Valores de catálogo» pone 9:41 y todo lleno |
+| | **Accesibilidad** | Navegador en el orden de VoiceOver, árbol de elementos con identificadores, auditoría con puntuación y ajustes (texto, contraste, movimiento, animaciones lentas…) |
+| | **Datos de la app** | User Defaults editables, bases SQLite (Core Data, SwiftData) con consultas, archivos del contenedor, borrar datos y reiniciar en otro idioma |
+| Diseño | **Cuadrícula** | Rejilla y columnas de maquetación, con medidas por jerarquía como en una herramienta de diseño |
+| | **Reglas** | Coordenadas del cursor y guías para medir distancias, sin estorbar a la app |
+| | **Colores** | La paleta de la pantalla, los colores con nombre del catálogo de la app y un cuentagotas. Un clic copia el `Color` de SwiftUI |
 
-Las herramientas de diseño necesitan el permiso de **Accesibilidad** (macOS lo pide la primera vez): es la única forma de saber dónde está exactamente la pantalla dentro de la ventana del Simulador. El resto del panel no necesita ningún permiso.
+<p align="center">
+  <img src="assets/datos-diseno.gif" alt="Archivos de la app, cuadrícula y paleta de colores" width="820">
+</p>
+
+### Un inicio que te dice qué app tienes delante
+
+El panel se abre en el inicio: ahí eliges la app sobre la que actúa todo (con buscador, y se recuerda por simulador)
+y ves su ficha: versión, **número de compilación**, iOS mínimo, cuándo se compiló, SDK, tamaño y esquemas de URL. Si
+falta el permiso de Accesibilidad, lo pide ahí mismo y explica para qué sirve.
+
+<p align="center">
+  <img src="assets/inicio.png" alt="Inicio de Saguru con la ficha de la app" width="820">
+</p>
 
 ## El CLI
+
+Las mismas acciones, para la terminal y para scripts:
 
 ```bash
 saguru devices
@@ -76,21 +144,31 @@ sonido, `thread-id`, datos propios.
 - Las acciones pasan por `xcrun simctl` (`Simctl.swift`); no se usan frameworks privados.
 - La galería lee la fototeca del simulador directamente de sus archivos en esta Mac (solo lectura), y los permisos
   de notificaciones, del archivo donde iOS los guarda.
-- La columna localiza la ventana del Simulador con la lista pública de ventanas del sistema y se ordena justo encima de ella.
+- El panel localiza la ventana del Simulador con la lista pública de ventanas del sistema y se coloca a su lado.
 - La capa de diseño usa la API de Accesibilidad para leer el rectángulo de la pantalla del dispositivo.
 - Red y cámara necesitan que la app arranque con el agente dentro, así que comparten un único lanzamiento: lo
   pida la herramienta que lo pida, la app sale con la red vigilada y con la cámara si se le dio alguna vez. Activar
   una no quita la otra, ni tampoco «Reiniciar» desde Datos. Saguru vigila ese proceso: si la app se cierra o se
   lanza desde Xcode o la pantalla de inicio, lo avisa en la herramienta en vez de seguir diciendo que captura.
 - La cámara usa el mismo agente (`agent/SaguruCamera.m`): dentro de la app sustituye a la cámara que falta, y recibe
-  los fotogramas de Saguru por un archivo que ambos mapean en memoria. `experiments/camera/app.m` es la app mínima
-  con la que se probó cada caso.
+  los fotogramas de Saguru por un archivo que ambos mapean en memoria. `experiments/camera/app.m` y `experiments/network/app.m` son las apps
+  mínimas con las que se probó cada caso y se grabaron las demostraciones de este README.
 - El monitor de red relanza la app con una pequeña biblioteca dentro (`agent/SaguruAgent.m`, cargada con
   `DYLD_INSERT_LIBRARIES`; nada se añade a tu proyecto). Esa biblioteca ve las peticiones de `URLSession`, las
   escribe en una carpeta temporal que Saguru lee, y responde con los mocks activos. Los mocks se guardan por app en
   `~/Library/Application Support/Saguru/mocks/<bundle id>/`.
 
+
+Las herramientas de diseño y el inspector necesitan el permiso de **Accesibilidad** de macOS: es la única forma de
+saber dónde está la pantalla del dispositivo dentro de la ventana del Simulador. El resto no pide ningún permiso,
+salvo el de cámara si eliges la de tu Mac como fuente.
+
 ## Límites conocidos
+
+Saguru prefiere decir lo que no hace. Lo mismo aparece dentro de cada herramienta donde importa.
+
+<details>
+<summary>Ver la lista completa</summary>
 
 - La cuadrícula combina dos fuentes: los elementos que la app expone a accesibilidad y los contenedores que detecta
   por su fondo en una captura. Un contenedor sin fondo propio (un simple `VStack`) no se ve, y los bordes detectados
@@ -135,7 +213,10 @@ sonido, `thread-id`, datos propios.
   ha probado.
 - Fuera de alcance por ahora: captura de pantalla o video (ya lo hace el Simulador).
 
+
+</details>
+
 ## Licencia
 
 [MIT](LICENSE). Incluye el servidor de [scrcpy](https://github.com/Genymobile/scrcpy), con licencia Apache 2.0
-(`vendor/scrcpy`).
+(`vendor/scrcpy`), para usar un Android como cámara.
