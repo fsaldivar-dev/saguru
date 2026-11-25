@@ -339,7 +339,7 @@ struct CameraForm: View {
                             .foregroundStyle(Color(nsColor: .systemOrange)).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
-                    Text("Funciona con apps que manejan la cámara ellas mismas: visor, fotogramas (Vision, OCR), lectura de QR y foto. No cubre las pantallas de cámara de Apple, como el escáner de documentos.")
+                    Text("Cubre el visor, los fotogramas (Vision, OCR), la lectura de QR, la foto, las cámaras frontal y trasera y la pantalla de cámara del sistema. No cubre el escáner de documentos de Apple.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(width: 250)

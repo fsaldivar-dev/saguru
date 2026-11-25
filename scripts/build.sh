@@ -30,7 +30,7 @@ rm -rf "$ICONSET"
 xcrun -sdk iphonesimulator clang -arch arm64 -arch x86_64 -dynamiclib -fobjc-arc -O2 -mios-simulator-version-min=15.0 \
   -framework Foundation -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreImage \
   -framework UIKit -framework QuartzCore -framework CoreGraphics -framework IOSurface \
-  agent/SaguruAgent.m agent/SaguruCamera.m -o "$APP/Contents/Resources/SaguruAgent.dylib"
+  agent/SaguruAgent.m agent/SaguruCamera.m agent/SaguruVision.m -o "$APP/Contents/Resources/SaguruAgent.dylib"
 
 # scrcpy's server, to use an Android phone as the camera's source (Apache 2.0, see vendor/scrcpy).
 cp vendor/scrcpy/scrcpy-server "$APP/Contents/Resources/scrcpy-server"

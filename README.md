@@ -26,7 +26,7 @@ El panel se abre en el **inicio**: si falta el permiso de Accesibilidad lo pide 
 |---|---|---|
 | Inyectar | Notificación push | Título, subtítulo, texto, badge, sonido y datos propios; vista JSON para editar el payload o abrir un `.apns`. Avisa antes de enviar si la app no tiene permiso de notificaciones |
 | | Galería | Panel con las fotos y videos del simulador: añadir (botón o arrastrando), seleccionar varias, exportar (botón o arrastrando a Finder) y eliminar. También se pueden soltar archivos sobre la columna |
-| | Cámara | Le da a la app una cámara, que el simulador no tiene. La fuente es una imagen (un QR, un documento), la cámara de esta Mac, un iPhone usado como cámara o un Android por USB, en vivo y con vista previa, con encuadre vertical y giro; se cambia de fuente sin relanzar la app. Cubre el visor, los fotogramas (Vision, OCR), la lectura de QR y la foto |
+| | Cámara | Le da a la app una cámara, que el simulador no tiene. La fuente es una imagen (un QR, un documento), la cámara de esta Mac, un iPhone usado como cámara o un Android por USB, en vivo y con vista previa, con encuadre vertical y giro; se cambia de fuente sin relanzar la app. Cubre el visor, los fotogramas (Vision, OCR), la lectura de QR, la foto, las cámaras frontal y trasera y la pantalla de cámara del sistema |
 | | Deep links | Abre URLs y deep links. Muestra los esquemas y dominios que declara la app activa, y guarda favoritos e historial por app. Las rutas no se pueden leer de la app: se guardan las que uses |
 | | Ubicación | Un mapa donde eliges el punto con un clic, buscador de lugares y coordenadas editables |
 | | Permisos | Cuadrícula con los permisos que la app declara en su Info.plist y su estado real: Preguntar, Limitado (ubicación al usar la app, fotos solo añadir), Permitir o Nunca. Notificaciones se muestra pero solo la app puede pedirlo |
@@ -116,12 +116,19 @@ sonido, `thread-id`, datos propios.
   WebSockets, `WKWebView` ni sockets propios. Solo captura si Saguru lanzó la app: al lanzarla desde Xcode hay que
   volver a pulsar Capturar. Un mock responde a un método y una URL sin mirar los parámetros; de cada cuerpo se
   guardan como mucho 8 MB. Las subidas por archivo o stream largo no se han probado.
-- La cámara sirve para apps que la manejan ellas mismas con `AVCaptureSession`. Las pantallas de cámara de Apple
-  (escáner de documentos de VisionKit, `UIImagePickerController`, `DataScanner`) no están cubiertas, y una app que
-  abra el escáner de documentos con la cámara activa se cierra. Solo se detectan códigos QR, no otros códigos de
-  barras. No hay video grabado, cámara frontal y trasera distintas, zoom, linterna, enfoque ni profundidad. Un
+- La cámara cubre las apps que la manejan con `AVCaptureSession` (cámara trasera y frontal, que muestran la misma
+  fuente) y `UIImagePickerController` con la cámara como origen, cuya pantalla se sustituye por una sencilla con la
+  imagen en vivo, disparador y cancelar. No están cubiertos el escáner de documentos de VisionKit ni `DataScanner`:
+  una app que abra el escáner de documentos con la cámara activa se cierra. El aviso de códigos de iOS
+  (`AVCaptureMetadataOutput`) solo entrega QR. No hay video grabado, zoom, linterna, enfoque ni profundidad. Un
   Android como fuente necesita `adb`, depuración USB y Android 12 o posterior; usa su cámara trasera. El video lo
-  entrega el servidor de scrcpy, que va incluido en Saguru (`vendor/scrcpy`, licencia Apache 2.0). La app solo recibe la cámara si Saguru la lanzó.
+  entrega el servidor de scrcpy, que va incluido en Saguru (`vendor/scrcpy`, licencia Apache 2.0). La app solo recibe
+  la cámara si Saguru la lanzó.
+- Vision en el simulador: las versiones nuevas de algunos detectores no funcionan ahí. Con el agente cargado
+  (`agent/SaguruVision.m`), las peticiones de códigos de barras y de caras se pasan a una versión anterior que sí
+  funciona; texto, rectángulos y documentos ya funcionaban. Puntos de la cara, personas y clasificación de imágenes
+  no tienen versión que funcione en el simulador y siguen fallando. La API nueva de Vision en Swift (iOS 18) no se
+  ha probado.
 - Fuera de alcance por ahora: captura de pantalla o video (ya lo hace el Simulador).
 
 ## Licencia
