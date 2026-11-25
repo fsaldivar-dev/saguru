@@ -317,14 +317,6 @@ struct GalleryView: View {
                 Label("Añadir", systemImage: "plus")
             }
             .disabled(panel.device == nil || model.busy)
-            Button {
-                panel.galleryOpen = false
-            } label: {
-                Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).frame(width: 22, height: 22)
-                    .background(.white.opacity(0.1), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Cerrar galería")
         }
         .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 14)
     }

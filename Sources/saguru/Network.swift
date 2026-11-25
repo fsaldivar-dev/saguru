@@ -470,6 +470,8 @@ private let hairline = Color.white.opacity(0.09)
 struct NetworkView: View {
     @ObservedObject var model: NetworkModel
     @ObservedObject var panel: PanelModel
+    /// Inside the docked panel rather than in a window of its own.
+    var embedded = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -523,6 +525,10 @@ struct NetworkView: View {
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
             Spacer()
+            if embedded {
+                Button { NetworkWindow.shared.show(panel); panel.openTool = nil } label: { Image(systemName: "macwindow") }
+                    .help("Abrir en una ventana aparte")
+            }
             if model.isWatching {
                 Button("Limpiar") { model.clear() }
                 Button("Relanzar") { model.start() }
@@ -534,7 +540,7 @@ struct NetworkView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 30)
+        .padding(.top, embedded ? 12 : 30)
         .padding(.bottom, 12)
     }
 
@@ -608,29 +614,29 @@ private struct RequestTable: View {
                     }
                 }
             }
-            .width(min: 70, ideal: 104, max: 130)
+            .width(min: 70, ideal: 96, max: 130)
             TableColumn("Método") { entry in
                 Text(entry.method).font(.system(.body, design: .monospaced).weight(.semibold))
                     .foregroundStyle(entry.method == "GET" ? Color(nsColor: .systemBlue) : Color(nsColor: .systemOrange))
             }
             .width(min: 50, ideal: 64, max: 80)
             TableColumn("Servidor") { entry in Text(entry.host).lineLimit(1).foregroundStyle(.secondary) }
-                .width(min: 90, ideal: 150)
+                .width(min: 80, ideal: 120)
             TableColumn("Ruta") { entry in
                 Text(entry.path + (entry.parts?.query.map { "?\($0)" } ?? "")).lineLimit(1).truncationMode(.middle)
             }
-            .width(min: 120, ideal: 260)
+            .width(min: 120, ideal: 170)
             TableColumn("Tipo") { entry in Text(entry.kind).foregroundStyle(.secondary) }
-                .width(min: 50, ideal: 70, max: 100)
+                .width(min: 50, ideal: 62, max: 100)
             TableColumn("Tamaño") { entry in
                 Text(entry.finished ? NetFormat.size(entry.responseSize) : "").monospacedDigit().foregroundStyle(.secondary)
             }
-            .width(min: 60, ideal: 76, max: 100)
+            .width(min: 56, ideal: 66, max: 100)
             TableColumn("Tiempo") { entry in
                 Text(NetFormat.duration(entry.duration)).monospacedDigit()
                     .foregroundStyle((entry.duration ?? 0) > 1 ? Color(nsColor: .systemOrange) : Color.secondary)
             }
-            .width(min: 60, ideal: 76, max: 100)
+            .width(min: 56, ideal: 66, max: 100)
         }
         .scrollContentBackground(.hidden)
         .background(surface)
@@ -729,15 +735,15 @@ private struct EntryDetail: View {
     private func side<Content: View>(title: String, tabs: [String], tab: Binding<String>, @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             HStack {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                Spacer()
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                Spacer(minLength: 6)
                 Picker("", selection: tab) { ForEach(tabs, id: \.self) { Text($0).tag($0) } }
-                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                    .pickerStyle(.segmented).labelsHidden().controlSize(.small).fixedSize()
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
             content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(minWidth: 300)
+        .frame(minWidth: 260)
     }
 }
 

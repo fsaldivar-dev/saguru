@@ -16,7 +16,7 @@ Crea `build/Saguru.app` y enlaza el comando `saguru` en `/usr/local/bin` o `~/.l
 saguru
 ```
 
-Aparece una columna a la derecha del Simulador. Lo sigue al moverlo y se oculta cuando el Simulador no está a la vista. No tiene icono en el Dock; se cierra con `saguru quit` o desde su menú `…`.
+Aparece una columna a la derecha del Simulador, sobre un marco que los une. Lo sigue al moverlo y se oculta cuando el Simulador no está a la vista. Cada herramienta se abre en un **panel acoplado** a continuación de la columna, tan alto como el Simulador; `»` lo despliega con la última herramienta y `«` lo pliega. La red también puede soltarse a una ventana aparte. No tiene icono en el Dock; se cierra con `saguru quit` o desde su menú `…`.
 
 Arriba de la columna está la **app activa**: se elige una vez (simulador y app, con buscador) y vale para todo lo
 que depende de una app: notificaciones, permisos y datos. Se recuerda por simulador.
@@ -24,7 +24,7 @@ que depende de una app: notificaciones, permisos y datos. Se recuerda por simula
 | Grupo | Botón | Qué hace |
 |---|---|---|
 | Inyectar | Notificación push | Título, subtítulo, texto, badge, sonido y datos propios; vista JSON para editar el payload o abrir un `.apns`. Avisa antes de enviar si la app no tiene permiso de notificaciones |
-| | Galería | Popover con las fotos y videos del simulador: añadir (botón o arrastrando), seleccionar varias, exportar (botón o arrastrando a Finder) y eliminar. También se pueden soltar archivos sobre la columna |
+| | Galería | Panel con las fotos y videos del simulador: añadir (botón o arrastrando), seleccionar varias, exportar (botón o arrastrando a Finder) y eliminar. También se pueden soltar archivos sobre la columna |
 | | Deep links | Abre URLs y deep links. Muestra los esquemas y dominios que declara la app activa, y guarda favoritos e historial por app. Las rutas no se pueden leer de la app: se guardan las que uses |
 | | Ubicación | Un mapa donde eliges el punto con un clic, buscador de lugares y coordenadas editables |
 | | Permisos | Cuadrícula con los permisos que la app declara en su Info.plist y su estado real: Preguntar, Limitado (ubicación al usar la app, fotos solo añadir), Permitir o Nunca. Notificaciones se muestra pero solo la app puede pedirlo |
@@ -32,7 +32,7 @@ que depende de una app: notificaciones, permisos y datos. Se recuerda por simula
 | | Barra de estado | Eliges cada parte: hora, Wi-Fi (conectado o apagado, e intensidad), red celular (con señal, buscando, sin servicio u oculta; barras y tipo de datos: 5G, LTE, 4G, 3G) y batería. «Valores de catálogo» pone 9:41, señal completa y batería llena |
 | | Accesibilidad | **Navegador**: numera los elementos sobre la pantalla en el orden de VoiceOver; ↑ ↓ los recorren, ← → cambian el rotor e Intro activa el elemento. **Árbol**: roles, etiquetas e identificadores (copiables), con resaltado. **Auditoría**: controles sin etiqueta, objetivos táctiles pequeños, contraste bajo, etiquetas e identificadores repetidos, con puntuación. **Ajustes**: animaciones lentas, tamaño de texto, aumentar contraste, texto en negrita, reducir transparencia, reducir movimiento, invertir colores, formas de botón, etiquetas de encendido y diferenciar sin color |
 | | Datos de la app | **Preferencias**: los User Defaults en una tabla, editables. **Bases de datos**: las SQLite de la app (Core Data, SwiftData…), sus tablas y un editor de consultas de solo lectura; el resultado se copia como tabla. **Archivos**: el contenedor con tamaños. **Acciones**: abrir carpeta, borrar datos, reiniciar en otro idioma |
-| | Red | Ventana con cada petición que hace la app: URL, método, estado, tiempo y tamaño; cabeceras, parámetros y cuerpos de petición y respuesta (JSON con formato, texto, imagen o binario, que se puede guardar); copiar como cURL. **Crear mock** convierte una petición capturada en una respuesta guardada, editable (estado, cabeceras, cuerpo, espera) y con interruptor. Sin proxy ni certificados |
+| | Red | Cada petición que hace la app: URL, método, estado, tiempo y tamaño; cabeceras, parámetros y cuerpos de petición y respuesta (JSON con formato, texto, imagen o binario, que se puede guardar); copiar como cURL. **Crear mock** convierte una petición capturada en una respuesta guardada, editable (estado, cabeceras, cuerpo, espera) y con interruptor. Sin proxy ni certificados |
 | Diseño | Cuadrícula | Rejilla de 2, 4, 8 o 16 pt y columnas de maquetación, con medidas por jerarquía como en una herramienta de diseño: detecta los contenedores (tarjetas, barras, chips), mide cada caja contra la de al lado o contra la pared de su contenedor, y se puede entrar en un contenedor para medir lo de dentro. Verde si las medidas son múltiplos del paso, naranja si no |
 | | Reglas | Coordenadas del cursor; ⌥ fija una guía y mide la distancia. No captura clics: la app sigue usable |
 | | Colores | Paleta de la pantalla (colores en uso y cuánto ocupan), los colores con nombre del catálogo de la app, y un cuentagotas. Un clic copia el color como `Color` de SwiftUI |

@@ -27,6 +27,10 @@ final class PanelController: NSObject, NSApplicationDelegate {
     private var toastHost: NSHostingView<ToastView>!
     private var overlay: NSPanel!
     private var handle: NSPanel!
+    private var drawer: NSPanel!
+    private var drawerHost: NSHostingView<DrawerView>!
+    private var backdrop: NSPanel!
+    private var shownTool: Tool?
     private var toastText = ""
     private var timer: Timer?
     private var tick = 0
@@ -56,6 +60,20 @@ final class PanelController: NSObject, NSApplicationDelegate {
         // The design overlay is only ever drawn over the Simulator: it never takes its clicks.
         overlay.ignoresMouseEvents = true
         (handle, _) = makePanel(SplitHandle(model: model))
+        // The docked panel takes the keyboard (its forms have text fields), so it is a window that can be key.
+        let host = NSHostingView(rootView: DrawerView(model: model))
+        let drawer = KeyPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 600), styleMask: [.borderless], backing: .buffered, defer: false)
+        drawer.isOpaque = false
+        drawer.backgroundColor = .clear
+        drawer.hasShadow = true
+        drawer.hidesOnDeactivate = false
+        drawer.isMovable = false
+        drawer.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        drawer.contentView = host
+        self.drawer = drawer
+        drawerHost = host
+        (backdrop, _) = makePanel(BackdropView())
+        backdrop.ignoresMouseEvents = true
         // Developer builds lose the Accessibility permission whenever the signature changes, so it is
         // asked for at every launch that does not have it. macOS applies it after a relaunch.
         if !SimulatorAX.trusted { SimulatorAX.requestAccess() }
@@ -72,18 +90,18 @@ final class PanelController: NSObject, NSApplicationDelegate {
         tick += 1
         let moving = Date().timeIntervalSince(lastChange) < 1.5
         let every = sim == nil ? 20 : (moving || model.measuring || model.split != nil ? 1 : 6)
-        if tick % every == 0 { follow() }
+        if tick % every == 0 || model.openTool != shownTool { follow() }
         if tick % 240 == 0 { model.refreshDevices() }
         updateToast()
     }
 
     private func follow() {
-        guard let found = Self.simulatorWindow(ignoring: [rail.windowNumber, toast.windowNumber, overlay.windowNumber, handle.windowNumber]) else {
+        guard let found = Self.simulatorWindow(ignoring: [rail.windowNumber, toast.windowNumber, overlay.windowNumber, handle.windowNumber, drawer.windowNumber, backdrop.windowNumber]) else {
             if sim != nil, !NSApp.isActive {
                 // Keep the rail while one of our own popovers or dialogs is in use.
                 sim = nil
-                [rail, toast, overlay, handle].forEach { $0?.orderOut(nil) }
-                model.galleryOpen = false
+                [rail, toast, overlay, handle, drawer, backdrop].forEach { $0?.orderOut(nil) }
+                shownTool = nil
             }
             return
         }
@@ -125,11 +143,46 @@ final class PanelController: NSObject, NSApplicationDelegate {
         let shouldFloat = front == "com.apple.iphonesimulator" || NSApp.isActive
         if shouldFloat != floating {
             floating = shouldFloat
-            [rail, toast, overlay, handle].forEach { $0?.level = shouldFloat ? .floating : .normal }
+            [rail, toast, overlay, handle, drawer].forEach { $0?.level = shouldFloat ? .floating : .normal }
         }
         if !rail.isVisible { rail.orderFrontRegardless() }
         if !floating, !above.contains(rail.windowNumber) { rail.order(.above, relativeTo: window.number) }
+        followDrawer(window, screen: screen, above: above)
         followOverlay(window, isAbove: floating || above.contains(overlay.windowNumber))
+    }
+
+    /// The docked panel sits beyond the rail, as tall as the Simulator window, and the tray goes behind all three.
+    private func followDrawer(_ window: SimWindow, screen: NSScreen?, above: Set<Int>) {
+        let gap: CGFloat = 6
+        var united = window.frame.union(rail.frame)
+        if model.openTool != nil {
+            let railOnRight = rail.frame.minX >= window.frame.midX
+            let visible = screen?.visibleFrame ?? window.frame
+            let room = railOnRight ? visible.maxX - rail.frame.maxX - gap - 10 : rail.frame.minX - gap - 10 - visible.minX
+            let width = min(drawerHost.fittingSize.width, max(room, 320))
+            let height = max(window.frame.height, 360)
+            let x = railOnRight ? rail.frame.maxX + gap : rail.frame.minX - gap - width
+            let target = NSRect(x: x, y: window.frame.maxY - height, width: width, height: height)
+            if drawer.frame != target { drawer.setFrame(target, display: true) }
+            if model.openTool != shownTool {
+                // Typing in a form needs Saguru to be the active app and the panel its key window.
+                NSApp.activate(ignoringOtherApps: true)
+                drawer.makeKeyAndOrderFront(nil)
+            } else if !drawer.isVisible {
+                drawer.orderFrontRegardless()
+            }
+            if !floating, !above.contains(drawer.windowNumber) { drawer.order(.above, relativeTo: window.number) }
+            united = united.union(target)
+        } else if drawer.isVisible {
+            drawer.orderOut(nil)
+        }
+        let changed = model.openTool != shownTool
+        shownTool = model.openTool
+
+        let tray = united.insetBy(dx: -8, dy: -8)
+        if backdrop.frame != tray { backdrop.setFrame(tray, display: true) }
+        // Always just under the Simulator's window, whichever app is in front.
+        if !backdrop.isVisible || changed || tick % 12 == 0 { backdrop.order(.below, relativeTo: window.number) }
     }
 
     private func followOverlay(_ window: SimWindow, isAbove: Bool) {

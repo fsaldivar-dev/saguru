@@ -33,7 +33,6 @@ private struct RailButton: View {
 
     var body: some View {
         Button {
-            if !keepsGallery { model.galleryOpen = false }
             action()
         } label: {
             Image(systemName: symbol)
@@ -65,14 +64,7 @@ private struct RailPopover<Form: View>: View {
 
     var body: some View {
         RailButton(model: model, symbol: symbol, name: name, active: active || model.openTool == tool) {
-            // Typing in the form needs Saguru to be the active app.
-            NSApp.activate(ignoringOtherApps: true)
             model.openTool = model.openTool == tool ? nil : tool
-        }
-        .popover(isPresented: Binding(get: { model.openTool == tool },
-                                      set: { if !$0, model.openTool == tool { model.openTool = nil } }),
-                 arrowEdge: .trailing) {
-            form().modifier(PopoverSurface())
         }
     }
 }
@@ -95,8 +87,6 @@ private struct ContextButton: View {
 
     var body: some View {
         Button {
-            NSApp.activate(ignoringOtherApps: true)
-            model.galleryOpen = false
             model.openTool = model.openTool == .context ? nil : .context
         } label: {
             AppBadge(app: model.app, size: 26)
@@ -112,11 +102,6 @@ private struct ContextButton: View {
             let name = model.app?.name ?? "Elegir app"
             if inside { model.hint = name } else if model.hint == name { model.hint = "" }
         }
-        .popover(isPresented: Binding(get: { model.openTool == .context },
-                                      set: { if !$0, model.openTool == .context { model.openTool = nil } }),
-                 arrowEdge: .trailing) {
-            ContextForm(model: model).modifier(PopoverSurface())
-        }
     }
 }
 
@@ -125,17 +110,14 @@ struct RailView: View {
 
     var body: some View {
         VStack(spacing: 2) {
+            RailButton(model: model, symbol: model.openTool == nil ? "chevron.right.2" : "chevron.left.2",
+                       name: model.openTool == nil ? "Desplegar el panel" : "Plegar el panel") {
+                model.openTool = model.openTool == nil ? model.lastTool : nil
+            }
             ContextButton(model: model)
             separator
             RailPopover(model: model, tool: .push, symbol: "bell.badge", name: "Notificación push") { PushForm(model: model) }
-            RailButton(model: model, symbol: "photo.on.rectangle.angled", name: "Galería", active: model.galleryOpen,
-                       action: {
-                           model.openTool = nil
-                           model.galleryOpen.toggle()
-                       }, keepsGallery: true)
-            .background(PersistentPopover(isPresented: $model.galleryOpen) {
-                GalleryView(model: model.gallery, panel: model)
-            })
+            RailPopover(model: model, tool: .gallery, symbol: "photo.on.rectangle.angled", name: "Galería") { EmptyView() }
             RailPopover(model: model, tool: .url, symbol: "link", name: "Deep links") { URLForm(model: model) }
             RailPopover(model: model, tool: .location, symbol: "location", name: "Ubicación") { LocationForm(model: model) }
             RailPopover(model: model, tool: .privacy, symbol: "hand.raised", name: "Permisos") { PrivacyForm(model: model) }
@@ -146,10 +128,7 @@ struct RailView: View {
                         active: model.cleanBar) { StatusBarForm(model: model) }
             RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: "Accesibilidad") { AccessibilityForm(model: model) }
             RailPopover(model: model, tool: .data, symbol: "externaldrive", name: "Datos de la app") { DataForm(model: model) }
-            RailButton(model: model, symbol: "network", name: "Red", active: model.networkOpen) {
-                model.openTool = nil
-                NetworkWindow.shared.toggle(model)
-            }
+            RailPopover(model: model, tool: .network, symbol: "network", name: "Red", active: model.networkOpen) { EmptyView() }
             separator
             RailPopover(model: model, tool: .grid, symbol: "grid", name: "Cuadrícula", active: model.gridOn) { GridForm(model: model) }
             RailButton(model: model, symbol: "ruler", name: "Reglas", active: model.measuring) { model.toggleMeasuring() }

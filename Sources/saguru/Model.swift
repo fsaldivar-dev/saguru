@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Tool: String {
-    case context, push, url, location, privacy, appearance, statusBar, accessibility, data, grid, colors
+    case context, push, gallery, url, location, privacy, appearance, statusBar, accessibility, data, network, grid, colors
 }
 
 struct DefaultsEntry: Identifiable, Hashable {
@@ -26,9 +26,10 @@ final class PanelModel: ObservableObject {
     @Published var pushPermission = Simctl.NotificationPermission.unknown
     /// Popover currently open, if any.
     @Published var openTool: Tool? {
-        // One thing open at a time: a form replaces the gallery.
-        didSet { if openTool != nil, galleryOpen { galleryOpen = false } }
+        didSet { if let openTool { lastTool = openTool } }
     }
+    /// What the panel shows when it is unfolded again.
+    var lastTool = Tool.network
     /// Name of the button under the cursor (shown as a tooltip) and the last action's outcome.
     @Published var hint = ""
     @Published var status = ""
@@ -384,7 +385,10 @@ final class PanelModel: ObservableObject {
         }
     }
 
-    @Published var galleryOpen = false
+    var galleryOpen: Bool {
+        get { openTool == .gallery }
+        set { if newValue { openTool = .gallery } else if openTool == .gallery { openTool = nil } }
+    }
     /// The gallery's contents; kept here so they survive closing and reopening its popover.
     private(set) lazy var gallery = GalleryModel(panel: self)
 
