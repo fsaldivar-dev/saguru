@@ -377,20 +377,27 @@ enum Simctl {
 
     // MARK: User Defaults (through the simulator's own `defaults`, so running apps see the change)
 
+    /// The app's preferences domain, as a path. An app's User Defaults live in a file inside its own data
+    /// container; asking the simulator for the bundle identifier looks elsewhere and finds nothing.
+    private static func defaultsDomain(_ udid: String, bundleID: String) throws -> String {
+        try dataContainer(udid, bundleID: bundleID).appendingPathComponent("Library/Preferences/\(bundleID)").path
+    }
+
     static func defaults(_ udid: String, bundleID: String) -> [String: Any] {
-        guard let data = try? run(["spawn", udid, "defaults", "export", bundleID, "-"]),
+        guard let domain = try? defaultsDomain(udid, bundleID: bundleID),
+              let data = try? run(["spawn", udid, "defaults", "export", domain, "-"]),
               let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
         else { return [:] }
         return plist
     }
 
-    /// `type` is "string", "bool", "int" or "float".
+    /// `type` is "string", "bool", "int" or "float". The app reads the new value the next time it starts.
     static func writeDefault(_ udid: String, bundleID: String, key: String, type: String, value: String) throws {
-        try run(["spawn", udid, "defaults", "write", bundleID, key, "-\(type)", value])
+        try run(["spawn", udid, "defaults", "write", defaultsDomain(udid, bundleID: bundleID), key, "-\(type)", value])
     }
 
     static func deleteDefault(_ udid: String, bundleID: String, key: String) throws {
-        try run(["spawn", udid, "defaults", "delete", bundleID, key])
+        try run(["spawn", udid, "defaults", "delete", defaultsDomain(udid, bundleID: bundleID), key])
     }
 
     // MARK: Screen metrics

@@ -71,11 +71,6 @@ struct OverlayView: View {
                         .frame(width: 2, height: geo.size.height)
                         .shadow(color: .black.opacity(0.5), radius: 3)
                         .offset(x: x - 1)
-                } else if let image = model.overlayImage, model.overlayVisible {
-                    Image(nsImage: image)
-                        .resizable()
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .opacity(model.overlayOpacity)
                 }
                 if model.gridOn {
                     Canvas { context, size in

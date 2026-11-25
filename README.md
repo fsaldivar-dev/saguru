@@ -31,9 +31,8 @@ que depende de una app: notificaciones, permisos y datos. Se recuerda por simula
 | Dispositivo | Apariencia | Claro u oscuro, y «Comparar»: la otra apariencia sobre media pantalla, con un tirador para deslizar. Un lado es la app en vivo; el otro es una foto que se vuelve a tomar sola, unos segundos después de que la pantalla cambie y se quede quieta |
 | | Barra de estado | Eliges cada parte: hora, Wi-Fi (conectado o apagado, e intensidad), red celular (con señal, buscando, sin servicio u oculta; barras y tipo de datos: 5G, LTE, 4G, 3G) y batería. «Valores de catálogo» pone 9:41, señal completa y batería llena |
 | | Accesibilidad | **Navegador**: numera los elementos sobre la pantalla en el orden de VoiceOver; ↑ ↓ los recorren, ← → cambian el rotor e Intro activa el elemento. **Árbol**: roles, etiquetas e identificadores (copiables), con resaltado. **Auditoría**: controles sin etiqueta, objetivos táctiles pequeños, contraste bajo, etiquetas e identificadores repetidos, con puntuación. **Ajustes**: animaciones lentas, tamaño de texto, aumentar contraste, texto en negrita, reducir transparencia, reducir movimiento, invertir colores, formas de botón, etiquetas de encendido y diferenciar sin color |
-| | Datos de la app | Abrir carpeta, borrar datos, reiniciar con otro idioma, editar User Defaults |
-| Diseño | Superponer diseño | Una imagen sobre la pantalla, con opacidad ajustable o con deslizador (diseño a un lado, app al otro) |
-| | Cuadrícula | En puntos, alineada a la pantalla |
+| | Datos de la app | **Preferencias**: los User Defaults en una tabla, editables. **Bases de datos**: las SQLite de la app (Core Data, SwiftData…), sus tablas y un editor de consultas de solo lectura; el resultado se copia como tabla. **Archivos**: el contenedor con tamaños. **Acciones**: abrir carpeta, borrar datos, reiniciar en otro idioma |
+| Diseño | Cuadrícula | En puntos, alineada a la pantalla |
 | | Reglas | Coordenadas del cursor; ⌥ fija una guía y mide la distancia. No captura clics: la app sigue usable |
 | | Cuentagotas | Copia el color como `Color` de SwiftUI |
 
@@ -60,6 +59,7 @@ simuru defaults com.miempresa.miapp
 simuru defaults com.miempresa.miapp onboardingVisto true --type bool
 simuru defaults com.miempresa.miapp onboardingVisto --delete
 simuru relaunch com.miempresa.miapp --lang en --region US
+simuru query com.miempresa.miapp "SELECT * FROM ZUSUARIO LIMIT 10" --db default.store
 ```
 
 Con varios simuladores arrancados hay que elegir uno con `-d "iPhone 17"` (nombre o UDID); Simuru no adivina.
@@ -77,6 +77,9 @@ sonido, `thread-id`, datos propios.
 - La capa de diseño usa la API de Accesibilidad para leer el rectángulo de la pantalla del dispositivo.
 
 ## Límites conocidos
+
+- Las bases de datos se abren en solo lectura: se consultan, no se modifican. Los cambios en User Defaults los lee
+  la app la próxima vez que arranca.
 
 - La hora de la barra de estado debe ir como `9:41`; el simulador rechaza otros formatos y, curiosamente, las horas
   en punto (`12:00`).

@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Tool: String {
-    case context, push, url, location, privacy, appearance, statusBar, accessibility, data, overlay, grid
+    case context, push, url, location, privacy, appearance, statusBar, accessibility, data, grid
 }
 
 struct DefaultsEntry: Identifiable, Hashable {
@@ -45,9 +45,6 @@ final class PanelModel: ObservableObject {
     @Published var defaults: [DefaultsEntry] = []
 
     // Design tools
-    @Published var overlayImage: NSImage?
-    @Published var overlayVisible = true
-    @Published var overlayOpacity = 0.5
     @Published var gridOn = false
     @Published var gridSpacing = 8.0
     @Published var measuring = false
@@ -80,16 +77,18 @@ final class PanelModel: ObservableObject {
             DispatchQueue.main.async { if bundleID == self.appID { self.pushPermission = permission } }
         }
     }
-    var needsOverlay: Bool { (overlayImage != nil && overlayVisible) || gridOn || measuring || split != nil || !axMarks.isEmpty }
+    var needsOverlay: Bool { gridOn || measuring || split != nil || !axMarks.isEmpty }
 
     /// Accessibility inspector: its state, the rectangles it draws over the screen, and where the
     /// Simulator window is (top-left coordinates), which the panel controller keeps up to date.
     private(set) lazy var inspector = InspectorModel(panel: self)
+    /// The app-data browser's state.
+    private(set) lazy var data = DataModel(panel: self)
     @Published var axMarks: [AXMark] = []
     var simulatorWindow: CGRect?
 
     // Split view: a picture over one side of the screen, with a divider to drag.
-    enum Split { case appearance, design }
+    enum Split { case appearance }
     /// What is being compared with the live app, if anything.
     @Published var split: Split?
     /// Where the divider is, from 0 (left edge) to 1 (right edge). The picture covers the left side.
@@ -106,7 +105,6 @@ final class PanelModel: ObservableObject {
     var splitPicture: NSImage? {
         switch split {
         case .appearance: return splitImage
-        case .design: return overlayImage
         case nil: return nil
         }
     }
@@ -657,20 +655,6 @@ final class PanelModel: ObservableObject {
         SimulatorAX.requestAccess()
         say("Permite Accesibilidad para Simuru y vuelve a intentarlo")
         return false
-    }
-
-    func pickOverlay() {
-        guard requireAccessibility() else { return }
-        pickFiles(types: [.image], multiple: false, prompt: "Superponer") { urls in
-            if let url = urls.first { self.setOverlay(url) }
-        }
-    }
-
-    func setOverlay(_ url: URL) {
-        guard let image = NSImage(contentsOf: url) else { return say("No se pudo leer la imagen") }
-        overlayImage = image
-        overlayVisible = true
-        say("Diseño superpuesto")
     }
 
     func toggleGrid() {

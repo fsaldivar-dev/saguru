@@ -147,8 +147,6 @@ struct RailView: View {
             RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: "Accesibilidad") { AccessibilityForm(model: model) }
             RailPopover(model: model, tool: .data, symbol: "externaldrive", name: "Datos de la app") { DataForm(model: model) }
             separator
-            RailPopover(model: model, tool: .overlay, symbol: "square.2.layers.3d", name: "Superponer diseño",
-                        active: model.overlayImage != nil && model.overlayVisible) { OverlayForm(model: model) }
             RailPopover(model: model, tool: .grid, symbol: "grid", name: "Cuadrícula", active: model.gridOn) { GridForm(model: model) }
             RailButton(model: model, symbol: "ruler", name: "Reglas", active: model.measuring) { model.toggleMeasuring() }
             RailButton(model: model, symbol: "eyedropper", name: "Cuentagotas") { model.pickColor() }

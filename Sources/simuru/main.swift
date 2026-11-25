@@ -19,6 +19,7 @@ USO
   simuru url <url>                        Abre una URL o deep link
   simuru location <lat> <lon> | clear     Simula la ubicación
   simuru privacy <grant|revoke|reset> <permiso> <app>
+  simuru query <app> "<SQL>" [--db base]   Consulta de solo lectura a una base SQLite de la app
 
   simuru appearance <dark|light|toggle>
   simuru statusbar <clean|reset>          9:41, batería y señal llenas
@@ -204,6 +205,32 @@ case "contrast":
     let value = next("on u off")
     guard ["on", "off"].contains(value) else { fail("usa on u off") }
     attempt("Aumentar contraste: \(value)") { try Simctl.setIncreaseContrast(device().udid, value == "on") }
+
+case "query":
+    let wanted = option("--db")
+    let bundleID = next("el bundle ID de la app")
+    let sql = next("la consulta SQL")
+    let container: URL
+    do { container = try Simctl.dataContainer(device().udid, bundleID: bundleID) } catch { fail("\(error)") }
+    var databases: [(path: String, url: URL)] = []
+    let prefix = container.resolvingSymlinksInPath().path + "/"
+    if let files = FileManager.default.enumerator(at: container, includingPropertiesForKeys: nil) {
+        for case let url as URL in files where !url.path.hasSuffix("-wal") && !url.path.hasSuffix("-shm") && SQLiteReader.isDatabase(url) {
+            let path = url.resolvingSymlinksInPath().path
+            databases.append((path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : url.lastPathComponent, url))
+        }
+    }
+    databases.sort { $0.path < $1.path }
+    let matches = wanted.map { name in databases.filter { $0.path == name || $0.path.hasSuffix("/" + name) || $0.url.lastPathComponent == name } } ?? databases
+    guard !matches.isEmpty else { fail(databases.isEmpty ? "\(bundleID) no tiene bases de datos SQLite" : "ninguna base coincide con «\(wanted ?? "")»") }
+    guard matches.count == 1 else {
+        fail("hay \(matches.count) bases de datos; elige una con --db:\n" + matches.map { "  \($0.path)" }.joined(separator: "\n"))
+    }
+    let result = SQLiteReader.query(matches[0].url, sql)
+    if let error = result.error { fail(error) }
+    print(result.columns.joined(separator: "\t"))
+    for row in result.rows { print(row.joined(separator: "\t")) }
+    if result.truncated { FileHandle.standardError.write(Data("simuru: se muestran las primeras \(SQLiteReader.rowLimit) filas\n".utf8)) }
 
 case "data":
     let action = next("open o erase")
