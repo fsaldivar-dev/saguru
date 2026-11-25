@@ -99,6 +99,9 @@ final class PanelModel: ObservableObject {
     private(set) lazy var inspector = InspectorModel(panel: self)
     /// The app-data browser's state.
     private(set) lazy var data = DataModel(panel: self)
+    /// The network monitor lives in a window of its own; this is whether it is open.
+    @Published var networkOpen = false
+    private(set) lazy var network = NetworkModel(panel: self)
     @Published var axMarks: [AXMark] = []
     var simulatorWindow: CGRect?
 

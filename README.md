@@ -32,6 +32,7 @@ que depende de una app: notificaciones, permisos y datos. Se recuerda por simula
 | | Barra de estado | Eliges cada parte: hora, Wi-Fi (conectado o apagado, e intensidad), red celular (con señal, buscando, sin servicio u oculta; barras y tipo de datos: 5G, LTE, 4G, 3G) y batería. «Valores de catálogo» pone 9:41, señal completa y batería llena |
 | | Accesibilidad | **Navegador**: numera los elementos sobre la pantalla en el orden de VoiceOver; ↑ ↓ los recorren, ← → cambian el rotor e Intro activa el elemento. **Árbol**: roles, etiquetas e identificadores (copiables), con resaltado. **Auditoría**: controles sin etiqueta, objetivos táctiles pequeños, contraste bajo, etiquetas e identificadores repetidos, con puntuación. **Ajustes**: animaciones lentas, tamaño de texto, aumentar contraste, texto en negrita, reducir transparencia, reducir movimiento, invertir colores, formas de botón, etiquetas de encendido y diferenciar sin color |
 | | Datos de la app | **Preferencias**: los User Defaults en una tabla, editables. **Bases de datos**: las SQLite de la app (Core Data, SwiftData…), sus tablas y un editor de consultas de solo lectura; el resultado se copia como tabla. **Archivos**: el contenedor con tamaños. **Acciones**: abrir carpeta, borrar datos, reiniciar en otro idioma |
+| | Red | Ventana con cada petición que hace la app: URL, método, estado, tiempo y tamaño; cabeceras, parámetros y cuerpos de petición y respuesta (JSON con formato, texto, imagen o binario, que se puede guardar); copiar como cURL. **Crear mock** convierte una petición capturada en una respuesta guardada, editable (estado, cabeceras, cuerpo, espera) y con interruptor. Sin proxy ni certificados |
 | Diseño | Cuadrícula | Rejilla de 2, 4, 8 o 16 pt y columnas de maquetación, con medidas por jerarquía como en una herramienta de diseño: detecta los contenedores (tarjetas, barras, chips), mide cada caja contra la de al lado o contra la pared de su contenedor, y se puede entrar en un contenedor para medir lo de dentro. Verde si las medidas son múltiplos del paso, naranja si no |
 | | Reglas | Coordenadas del cursor; ⌥ fija una guía y mide la distancia. No captura clics: la app sigue usable |
 | | Colores | Paleta de la pantalla (colores en uso y cuánto ocupan), los colores con nombre del catálogo de la app, y un cuentagotas. Un clic copia el color como `Color` de SwiftUI |
@@ -75,6 +76,10 @@ sonido, `thread-id`, datos propios.
   de notificaciones, del archivo donde iOS los guarda.
 - La columna localiza la ventana del Simulador con la lista pública de ventanas del sistema y se ordena justo encima de ella.
 - La capa de diseño usa la API de Accesibilidad para leer el rectángulo de la pantalla del dispositivo.
+- El monitor de red relanza la app con una pequeña biblioteca dentro (`agent/SimuruAgent.m`, cargada con
+  `DYLD_INSERT_LIBRARIES`; nada se añade a tu proyecto). Esa biblioteca ve las peticiones de `URLSession`, las
+  escribe en una carpeta temporal que Simuru lee, y responde con los mocks activos. Los mocks se guardan por app en
+  `~/Library/Application Support/Simuru/mocks/<bundle id>/`.
 
 ## Límites conocidos
 
@@ -102,7 +107,11 @@ sonido, `thread-id`, datos propios.
 - Simuru pide el permiso de Accesibilidad al arrancar si no lo tiene; macOS lo aplica tras relanzar. `scripts/build.sh`
   firma con tu certificado «Apple Development» si existe, y así el permiso sobrevive a las recompilaciones; sin
   certificado la firma es local y macOS lo vuelve a pedir tras cada build.
-- Fuera de alcance por ahora: red, cámara y captura de pantalla o video (esto último ya lo hace el Simulador).
+- El monitor de red solo ve lo que pasa por `URLSession` (también Alamofire y similares). No ve gRPC (Firestore),
+  WebSockets, `WKWebView` ni sockets propios. Solo captura si Simuru lanzó la app: al lanzarla desde Xcode hay que
+  volver a pulsar Capturar. Un mock responde a un método y una URL sin mirar los parámetros; de cada cuerpo se
+  guardan como mucho 8 MB. Las subidas por archivo o stream largo no se han probado.
+- Fuera de alcance por ahora: cámara y captura de pantalla o video (esto último ya lo hace el Simulador).
 
 ## Licencia
 

@@ -26,6 +26,10 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET"
 
+# The network agent: a small library that Simuru loads into an app when it launches it in the simulator.
+xcrun -sdk iphonesimulator clang -arch arm64 -arch x86_64 -dynamiclib -fobjc-arc -O2 -mios-simulator-version-min=15.0 \
+  -framework Foundation agent/SimuruAgent.m -o "$APP/Contents/Resources/SimuruAgent.dylib"
+
 # LSUIElement: no Dock icon, Simuru behaves as an extension of the Simulator.
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

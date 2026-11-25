@@ -146,6 +146,10 @@ struct RailView: View {
                         active: model.cleanBar) { StatusBarForm(model: model) }
             RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: "Accesibilidad") { AccessibilityForm(model: model) }
             RailPopover(model: model, tool: .data, symbol: "externaldrive", name: "Datos de la app") { DataForm(model: model) }
+            RailButton(model: model, symbol: "network", name: "Red", active: model.networkOpen) {
+                model.openTool = nil
+                NetworkWindow.shared.toggle(model)
+            }
             separator
             RailPopover(model: model, tool: .grid, symbol: "grid", name: "Cuadrícula", active: model.gridOn) { GridForm(model: model) }
             RailButton(model: model, symbol: "ruler", name: "Reglas", active: model.measuring) { model.toggleMeasuring() }
