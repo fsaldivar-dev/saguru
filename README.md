@@ -1,4 +1,4 @@
-# Simuru
+# Saguru
 
 Superpoderes para el Simulador de iOS: una columna de acciones que se pega a su ventana y un CLI con las mismas acciones. Gratis, abierto y sin instalar nada dentro de tu app.
 
@@ -8,15 +8,15 @@ Superpoderes para el Simulador de iOS: una columna de acciones que se pega a su 
 scripts/build.sh --install
 ```
 
-Crea `build/Simuru.app` y enlaza el comando `simuru` en `/usr/local/bin` o `~/.local/bin`. Requiere macOS 14+ y Xcode.
+Crea `build/Saguru.app` y enlaza el comando `saguru` en `/usr/local/bin` o `~/.local/bin`. Requiere macOS 14+ y Xcode.
 
 ## El panel
 
 ```bash
-simuru
+saguru
 ```
 
-Aparece una columna a la derecha del Simulador. Lo sigue al moverlo y se oculta cuando el Simulador no está a la vista. No tiene icono en el Dock; se cierra con `simuru quit` o desde su menú `…`.
+Aparece una columna a la derecha del Simulador. Lo sigue al moverlo y se oculta cuando el Simulador no está a la vista. No tiene icono en el Dock; se cierra con `saguru quit` o desde su menú `…`.
 
 Arriba de la columna está la **app activa**: se elige una vez (simulador y app, con buscador) y vale para todo lo
 que depende de una app: notificaciones, permisos y datos. Se recuerda por simulador.
@@ -42,28 +42,28 @@ Las herramientas de diseño necesitan el permiso de **Accesibilidad** (macOS lo 
 ## El CLI
 
 ```bash
-simuru devices
-simuru apps
-simuru push com.miempresa.miapp -t "Pedido en camino" -b "Llega en 10 minutos"
-simuru push com.miempresa.miapp --payload payload.json
-simuru media foto.jpg video.mp4
-simuru url miapp://perfil/42
-simuru location 19.4326 -99.1332        # o: simuru location clear
-simuru privacy grant photos com.miempresa.miapp
-simuru appearance toggle
-simuru statusbar clean                  # o: reset
-simuru textsize accessibility-large     # o: increment / decrement
-simuru contrast on
-simuru data open com.miempresa.miapp
-simuru data erase com.miempresa.miapp --yes
-simuru defaults com.miempresa.miapp
-simuru defaults com.miempresa.miapp onboardingVisto true --type bool
-simuru defaults com.miempresa.miapp onboardingVisto --delete
-simuru relaunch com.miempresa.miapp --lang en --region US
-simuru query com.miempresa.miapp "SELECT * FROM ZUSUARIO LIMIT 10" --db default.store
+saguru devices
+saguru apps
+saguru push com.miempresa.miapp -t "Pedido en camino" -b "Llega en 10 minutos"
+saguru push com.miempresa.miapp --payload payload.json
+saguru media foto.jpg video.mp4
+saguru url miapp://perfil/42
+saguru location 19.4326 -99.1332        # o: saguru location clear
+saguru privacy grant photos com.miempresa.miapp
+saguru appearance toggle
+saguru statusbar clean                  # o: reset
+saguru textsize accessibility-large     # o: increment / decrement
+saguru contrast on
+saguru data open com.miempresa.miapp
+saguru data erase com.miempresa.miapp --yes
+saguru defaults com.miempresa.miapp
+saguru defaults com.miempresa.miapp onboardingVisto true --type bool
+saguru defaults com.miempresa.miapp onboardingVisto --delete
+saguru relaunch com.miempresa.miapp --lang en --region US
+saguru query com.miempresa.miapp "SELECT * FROM ZUSUARIO LIMIT 10" --db default.store
 ```
 
-Con varios simuladores arrancados hay que elegir uno con `-d "iPhone 17"` (nombre o UDID); Simuru no adivina.
+Con varios simuladores arrancados hay que elegir uno con `-d "iPhone 17"` (nombre o UDID); Saguru no adivina.
 
 `push` comprueba que la app esté instalada y avisa si iOS no va a mostrar la notificación porque la app no tiene
 permiso de notificaciones (denegado, o nunca lo pidió). `--payload` acepta cualquier JSON de APNs: subtítulo,
@@ -76,10 +76,10 @@ sonido, `thread-id`, datos propios.
   de notificaciones, del archivo donde iOS los guarda.
 - La columna localiza la ventana del Simulador con la lista pública de ventanas del sistema y se ordena justo encima de ella.
 - La capa de diseño usa la API de Accesibilidad para leer el rectángulo de la pantalla del dispositivo.
-- El monitor de red relanza la app con una pequeña biblioteca dentro (`agent/SimuruAgent.m`, cargada con
+- El monitor de red relanza la app con una pequeña biblioteca dentro (`agent/SaguruAgent.m`, cargada con
   `DYLD_INSERT_LIBRARIES`; nada se añade a tu proyecto). Esa biblioteca ve las peticiones de `URLSession`, las
-  escribe en una carpeta temporal que Simuru lee, y responde con los mocks activos. Los mocks se guardan por app en
-  `~/Library/Application Support/Simuru/mocks/<bundle id>/`.
+  escribe en una carpeta temporal que Saguru lee, y responde con los mocks activos. Los mocks se guardan por app en
+  `~/Library/Application Support/Saguru/mocks/<bundle id>/`.
 
 ## Límites conocidos
 
@@ -94,7 +94,7 @@ sonido, `thread-id`, datos propios.
 - La hora de la barra de estado debe ir como `9:41`; el simulador rechaza otros formatos y, curiosamente, las horas
   en punto (`12:00`).
 
-- Eliminar fotos reconstruye la fototeca: el simulador no permite borrar una foto suelta, así que Simuru la vacía y
+- Eliminar fotos reconstruye la fototeca: el simulador no permite borrar una foto suelta, así que Saguru la vacía y
   vuelve a añadir las demás. Se pierden los álbumes, favoritos y ediciones hechos dentro del simulador, y Fotos
   vuelve a mostrar su pantalla de bienvenida.
 
@@ -104,11 +104,11 @@ sonido, `thread-id`, datos propios.
   que «se leería» se deducen del árbol. El contraste de la auditoría es una estimación sobre una captura.
 - Los ajustes de accesibilidad que `simctl` no cubre se escriben en las preferencias del simulador. Falta la
   escala de grises: no se pudo confirmar que surta efecto.
-- Simuru pide el permiso de Accesibilidad al arrancar si no lo tiene; macOS lo aplica tras relanzar. `scripts/build.sh`
+- Saguru pide el permiso de Accesibilidad al arrancar si no lo tiene; macOS lo aplica tras relanzar. `scripts/build.sh`
   firma con tu certificado «Apple Development» si existe, y así el permiso sobrevive a las recompilaciones; sin
   certificado la firma es local y macOS lo vuelve a pedir tras cada build.
 - El monitor de red solo ve lo que pasa por `URLSession` (también Alamofire y similares). No ve gRPC (Firestore),
-  WebSockets, `WKWebView` ni sockets propios. Solo captura si Simuru lanzó la app: al lanzarla desde Xcode hay que
+  WebSockets, `WKWebView` ni sockets propios. Solo captura si Saguru lanzó la app: al lanzarla desde Xcode hay que
   volver a pulsar Capturar. Un mock responde a un método y una URL sin mirar los parámetros; de cada cuerpo se
   guardan como mucho 8 MB. Las subidas por archivo o stream largo no se han probado.
 - Fuera de alcance por ahora: cámara y captura de pantalla o video (esto último ya lo hace el Simulador).

@@ -25,7 +25,7 @@ struct SimError: Error, CustomStringConvertible {
     let description: String
 }
 
-/// Thin wrapper over `xcrun simctl`: everything Simuru does to a simulator goes through here.
+/// Thin wrapper over `xcrun simctl`: everything Saguru does to a simulator goes through here.
 enum Simctl {
     static func process(_ args: [String]) -> Process {
         let p = Process()
@@ -234,7 +234,7 @@ enum Simctl {
 
     /// PNG of the device's screen as it is right now.
     static func screenshot(_ udid: String) throws -> Data {
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("simuru-\(UUID().uuidString).png")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("saguru-\(UUID().uuidString).png")
         defer { try? FileManager.default.removeItem(at: file) }
         try run(["io", udid, "screenshot", "--type=png", file.path])
         return try Data(contentsOf: file)

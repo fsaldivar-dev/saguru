@@ -1,4 +1,4 @@
-// Draws a placeholder Simuru icon (1024x1024 PNG): a simulator phone with the rail beside it.
+// Draws a placeholder Saguru icon (1024x1024 PNG): a simulator phone with the rail beside it.
 // Usage: swift scripts/make-icon.swift <output.png>
 import CoreGraphics
 import Foundation

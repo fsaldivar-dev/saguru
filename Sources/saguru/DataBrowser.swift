@@ -62,7 +62,7 @@ enum SQLiteReader {
         defer { sqlite3_finalize(statement) }
         // The file is open read-only anyway; this gives a clear message instead of SQLite's.
         guard sqlite3_stmt_readonly(statement) != 0 else {
-            return QueryResult(error: "Solo consultas de lectura (SELECT). Simuru no modifica las bases de datos de la app.")
+            return QueryResult(error: "Solo consultas de lectura (SELECT). Saguru no modifica las bases de datos de la app.")
         }
         var result = QueryResult()
         let count = sqlite3_column_count(statement)
@@ -103,7 +103,7 @@ final class DataModel: ObservableObject {
     @Published var problem: String?
 
     unowned let panel: PanelModel
-    private let queue = DispatchQueue(label: "simuru.data")
+    private let queue = DispatchQueue(label: "saguru.data")
     private var loaded = ""
 
     init(panel: PanelModel) {
@@ -374,7 +374,7 @@ struct DataForm: View {
                         }
                     }
                 }
-                Text("Solo lectura: Simuru no modifica las bases de datos de la app.")
+                Text("Solo lectura: Saguru no modifica las bases de datos de la app.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

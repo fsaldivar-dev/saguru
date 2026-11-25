@@ -2,36 +2,36 @@ import AppKit
 import Foundation
 
 let version = "0.1.0"
-let bundleIdentifier = "dev.simuru.app"
+let bundleIdentifier = "dev.saguru.app"
 
 let usage = """
-Simuru \(version) — superpoderes para el Simulador de iOS.
+Saguru \(version) — superpoderes para el Simulador de iOS.
 
 USO
-  simuru                                  Acopla el panel a la ventana del Simulador
-  simuru quit                             Cierra el panel
+  saguru                                  Acopla el panel a la ventana del Simulador
+  saguru quit                             Cierra el panel
 
-  simuru devices                          Simuladores arrancados
-  simuru apps                             Apps instaladas
+  saguru devices                          Simuladores arrancados
+  saguru apps                             Apps instaladas
 
-  simuru push <app> [-t título] [-b texto] [--badge n] [--payload a.json]
-  simuru media <archivo>…                 Añade fotos y videos a la librería
-  simuru url <url>                        Abre una URL o deep link
-  simuru location <lat> <lon> | clear     Simula la ubicación
-  simuru privacy <grant|revoke|reset> <permiso> <app>
-  simuru query <app> "<SQL>" [--db base]   Consulta de solo lectura a una base SQLite de la app
+  saguru push <app> [-t título] [-b texto] [--badge n] [--payload a.json]
+  saguru media <archivo>…                 Añade fotos y videos a la librería
+  saguru url <url>                        Abre una URL o deep link
+  saguru location <lat> <lon> | clear     Simula la ubicación
+  saguru privacy <grant|revoke|reset> <permiso> <app>
+  saguru query <app> "<SQL>" [--db base]   Consulta de solo lectura a una base SQLite de la app
 
-  simuru appearance <dark|light|toggle>
-  simuru statusbar <clean|reset>          9:41, batería y señal llenas
-  simuru textsize <tamaño|increment|decrement>
-  simuru contrast <on|off>
+  saguru appearance <dark|light|toggle>
+  saguru statusbar <clean|reset>          9:41, batería y señal llenas
+  saguru textsize <tamaño|increment|decrement>
+  saguru contrast <on|off>
 
-  simuru data open <app>                  Abre la carpeta de datos en Finder
-  simuru data erase <app> --yes           Vacía los datos de la app
-  simuru defaults <app>                   Lista sus User Defaults
-  simuru defaults <app> <clave> <valor> [--type string|bool|int|float]
-  simuru defaults <app> <clave> --delete
-  simuru relaunch <app> [--lang es] [--region MX]
+  saguru data open <app>                  Abre la carpeta de datos en Finder
+  saguru data erase <app> --yes           Vacía los datos de la app
+  saguru defaults <app>                   Lista sus User Defaults
+  saguru defaults <app> <clave> <valor> [--type string|bool|int|float]
+  saguru defaults <app> <clave> --delete
+  saguru relaunch <app> [--lang es] [--region MX]
 
 OPCIONES
   -d, --device <texto>   Nombre (o parte) o UDID, si hay varios simuladores arrancados
@@ -40,7 +40,7 @@ OPCIONES
 """
 
 func fail(_ message: String) -> Never {
-    FileHandle.standardError.write(Data("simuru: \(message)\n".utf8))
+    FileHandle.standardError.write(Data("saguru: \(message)\n".utf8))
     exit(1)
 }
 
@@ -146,7 +146,7 @@ case "push":
         let permission = try Simctl.push(target.udid, bundleID: bundleID, payload: payload)
         print("Notificación enviada a \(bundleID) en \(target.name)")
         if let warning = permission.warning {
-            FileHandle.standardError.write(Data("simuru: aviso: \(warning)\n".utf8))
+            FileHandle.standardError.write(Data("saguru: aviso: \(warning)\n".utf8))
         }
     } catch {
         fail("\(error)")
@@ -230,7 +230,7 @@ case "query":
     if let error = result.error { fail(error) }
     print(result.columns.joined(separator: "\t"))
     for row in result.rows { print(row.joined(separator: "\t")) }
-    if result.truncated { FileHandle.standardError.write(Data("simuru: se muestran las primeras \(SQLiteReader.rowLimit) filas\n".utf8)) }
+    if result.truncated { FileHandle.standardError.write(Data("saguru: se muestran las primeras \(SQLiteReader.rowLimit) filas\n".utf8)) }
 
 case "data":
     let action = next("open o erase")
@@ -279,17 +279,17 @@ case "relaunch":
 case "quit":
     let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
     running.forEach { $0.terminate() }
-    print(running.isEmpty ? "Simuru no estaba abierto." : "Simuru cerrado.")
+    print(running.isEmpty ? "Saguru no estaba abierto." : "Saguru cerrado.")
 
 case "panel":
-    // From a terminal, hand over to Simuru.app through LaunchServices: the command returns at once,
-    // a second call reuses the running panel, and permissions belong to Simuru rather than the terminal.
+    // From a terminal, hand over to Saguru.app through LaunchServices: the command returns at once,
+    // a second call reuses the running panel, and permissions belong to Saguru rather than the terminal.
     let executable = URL(fileURLWithPath: Bundle.main.executablePath ?? CommandLine.arguments[0]).resolvingSymlinksInPath()
     let bundle = executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    if bundle.pathExtension == "app", ProcessInfo.processInfo.environment["SIMURU_APP"] == nil {
+    if bundle.pathExtension == "app", ProcessInfo.processInfo.environment["SAGURU_APP"] == nil {
         let launcher = Process()
         launcher.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        launcher.arguments = ["-a", bundle.path, "--env", "SIMURU_APP=1"]
+        launcher.arguments = ["-a", bundle.path, "--env", "SAGURU_APP=1"]
         do { try launcher.run() } catch { fail("no se pudo abrir \(bundle.path)") }
         launcher.waitUntilExit()
         if Simctl.booted().isEmpty { print("Panel listo. Aparecerá junto al Simulador cuando arranques uno.") }

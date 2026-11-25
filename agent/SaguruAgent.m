@@ -1,16 +1,16 @@
-// SimuruAgent: loaded into an app running in the iOS Simulator (never part of the app itself).
+// SaguruAgent: loaded into an app running in the iOS Simulator (never part of the app itself).
 // It watches the app's URLSession traffic and can answer chosen requests with a saved response.
 //
-// It talks to Simuru through a folder on the Mac, which the simulator shares:
+// It talks to Saguru through a folder on the Mac, which the simulator shares:
 //   events.jsonl   one JSON object per line, written here: a request starting, a request ending
 //   <id>.req/.res  the bodies, as files, so images and other binaries travel untouched
-//   mocks.json     written by Simuru: the responses to give instead of going to the network
+//   mocks.json     written by Saguru: the responses to give instead of going to the network
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 
 static NSString *gFolder;
 static dispatch_queue_t gWriter;
-static NSString *const kHandled = @"dev.simuru.handled";
+static NSString *const kHandled = @"dev.saguru.handled";
 static const NSUInteger kStoredBodyLimit = 8 * 1024 * 1024;
 
 static void Emit(NSDictionary *event) {
@@ -42,7 +42,7 @@ static NSString *Route(NSURL *url) {
     return parts.string ?: url.absoluteString;
 }
 
-/// The mock for a request, if Simuru has one enabled. The file is read again whenever it changes.
+/// The mock for a request, if Saguru has one enabled. The file is read again whenever it changes.
 static NSDictionary *MockFor(NSURLRequest *request) {
     static NSArray *mocks;
     static NSDate *loaded;
@@ -67,10 +67,10 @@ static NSDictionary *MockFor(NSURLRequest *request) {
     }
 }
 
-@interface SimuruURLProtocol : NSURLProtocol <NSURLSessionDataDelegate>
+@interface SaguruURLProtocol : NSURLProtocol <NSURLSessionDataDelegate>
 @end
 
-@implementation SimuruURLProtocol {
+@implementation SaguruURLProtocol {
     NSURLSession *_session;
     NSString *_identifier;
     NSDate *_started;
@@ -213,8 +213,8 @@ static NSDictionary *MockFor(NSURLRequest *request) {
 
 static void Include(NSURLSessionConfiguration *configuration) {
     NSMutableArray *classes = [configuration.protocolClasses mutableCopy] ?: [NSMutableArray array];
-    if (![classes containsObject:SimuruURLProtocol.class]) {
-        [classes insertObject:SimuruURLProtocol.class atIndex:0];
+    if (![classes containsObject:SaguruURLProtocol.class]) {
+        [classes insertObject:SaguruURLProtocol.class atIndex:0];
         configuration.protocolClasses = classes;
     }
 }
@@ -224,13 +224,13 @@ static NSURLSessionConfiguration *(*gEphemeral)(id, SEL);
 static NSURLSessionConfiguration *DefaultConfiguration(id self, SEL _cmd) { NSURLSessionConfiguration *c = gDefault(self, _cmd); Include(c); return c; }
 static NSURLSessionConfiguration *EphemeralConfiguration(id self, SEL _cmd) { NSURLSessionConfiguration *c = gEphemeral(self, _cmd); Include(c); return c; }
 
-__attribute__((constructor)) static void SimuruAgentLoad(void) {
-    const char *folder = getenv("SIMURU_NET_FOLDER");
+__attribute__((constructor)) static void SaguruAgentLoad(void) {
+    const char *folder = getenv("SAGURU_NET_FOLDER");
     if (!folder) return;
     gFolder = [NSString stringWithUTF8String:folder];
-    gWriter = dispatch_queue_create("dev.simuru.agent", DISPATCH_QUEUE_SERIAL);
+    gWriter = dispatch_queue_create("dev.saguru.agent", DISPATCH_QUEUE_SERIAL);
     // URLSession.shared and anything using the registered protocols.
-    [NSURLProtocol registerClass:SimuruURLProtocol.class];
+    [NSURLProtocol registerClass:SaguruURLProtocol.class];
     // Sessions created with their own configuration: the configuration is handed out with this agent in it.
     Class meta = object_getClass(NSURLSessionConfiguration.class);
     Method method = class_getInstanceMethod(meta, @selector(defaultSessionConfiguration));

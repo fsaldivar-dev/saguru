@@ -181,15 +181,15 @@ struct ContextForm: View {
                     .labelsHidden()
                     if !model.knowsWindowDevice {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("Simuru no puede ver a qué simulador está pegado.")
+                            Text("Saguru no puede ver a qué simulador está pegado.")
                                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 0)
                             Button("Permitir") {
                                 SimulatorAX.requestAccess()
-                                model.say("Activa Simuru en Accesibilidad y vuelve a abrirlo")
+                                model.say("Activa Saguru en Accesibilidad y vuelve a abrirlo")
                             }
                             .controlSize(.small)
-                            .help("Con el permiso de Accesibilidad, Simuru lee el título de la ventana y elige el simulador solo")
+                            .help("Con el permiso de Accesibilidad, Saguru lee el título de la ventana y elige el simulador solo")
                         }
                     }
                 } else {
@@ -669,7 +669,7 @@ struct AppearanceForm: View {
                 Text("\(model.splitLabels.0) a la izquierda, \(model.splitLabels.1) a la derecha.")
                     .font(.callout).foregroundStyle(.secondary)
             }
-            Text("El lado derecho es la app en vivo. El izquierdo es una foto de la otra apariencia, que Simuru vuelve a tomar sola cuando la pantalla cambia y se queda quieta. Arrastra el tirador para comparar.")
+            Text("El lado derecho es la app en vivo. El izquierdo es una foto de la otra apariencia, que Saguru vuelve a tomar sola cuando la pantalla cambia y se queda quieta. Arrastra el tirador para comparar.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { model.loadAppearance() }

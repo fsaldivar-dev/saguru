@@ -55,7 +55,7 @@ enum MediaLibrary {
 
     private static func query(_ database: URL) -> [(name: String, directory: String, isVideo: Bool, duration: Double)]? {
         var handle: OpaquePointer?
-        // Read-only: Simuru never writes to this database (iOS rejects outside writes anyway).
+        // Read-only: Saguru never writes to this database (iOS rejects outside writes anyway).
         guard sqlite3_open_v2(database.path, &handle, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
             sqlite3_close(handle)
             return nil
@@ -80,7 +80,7 @@ enum MediaLibrary {
     static func remove(_ doomed: Set<String>, from udid: String) throws {
         let keep = items(udid).filter { !doomed.contains($0.id) }
         let fm = FileManager.default
-        let safe = fm.temporaryDirectory.appendingPathComponent("simuru-fototeca-\(UUID().uuidString)", isDirectory: true)
+        let safe = fm.temporaryDirectory.appendingPathComponent("saguru-fototeca-\(UUID().uuidString)", isDirectory: true)
         try fm.createDirectory(at: safe, withIntermediateDirectories: true)
         var copies: [URL] = []
         for (index, item) in keep.enumerated() {
@@ -122,7 +122,7 @@ final class GalleryModel: ObservableObject {
     @Published var dropTargeted = false
 
     let panel: PanelModel
-    private let work = DispatchQueue(label: "simuru.gallery")
+    private let work = DispatchQueue(label: "saguru.gallery")
     private var loaded: String?
 
     init(panel: PanelModel) {
@@ -217,7 +217,7 @@ final class GalleryModel: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = doomed.count == 1 ? "¿Eliminar esta foto del simulador?" : "¿Eliminar \(doomed.count) elementos del simulador?"
-        alert.informativeText = "El simulador no permite borrar fotos sueltas, así que Simuru vacía la fototeca y vuelve a añadir las demás. Se pierden los álbumes, favoritos y ediciones hechos dentro del simulador."
+        alert.informativeText = "El simulador no permite borrar fotos sueltas, así que Saguru vacía la fototeca y vuelve a añadir las demás. Se pierden los álbumes, favoritos y ediciones hechos dentro del simulador."
         alert.addButton(withTitle: "Eliminar").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancelar")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
@@ -478,9 +478,9 @@ private final class SolidHostingController: NSHostingController<AnyView> {
     override func viewDidAppear() {
         super.viewDidAppear()
         guard let frame = view.window?.contentView?.superview,
-              !frame.subviews.contains(where: { $0.identifier?.rawValue == "simuru.solid" }) else { return }
+              !frame.subviews.contains(where: { $0.identifier?.rawValue == "saguru.solid" }) else { return }
         let fill = NSView(frame: frame.bounds)
-        fill.identifier = NSUserInterfaceItemIdentifier("simuru.solid")
+        fill.identifier = NSUserInterfaceItemIdentifier("saguru.solid")
         fill.wantsLayer = true
         fill.layer?.backgroundColor = NSColor(red: 0.13, green: 0.13, blue: 0.145, alpha: 1).cgColor
         fill.autoresizingMask = [.width, .height]

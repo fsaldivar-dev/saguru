@@ -65,7 +65,7 @@ private struct RailPopover<Form: View>: View {
 
     var body: some View {
         RailButton(model: model, symbol: symbol, name: name, active: active || model.openTool == tool) {
-            // Typing in the form needs Simuru to be the active app.
+            // Typing in the form needs Saguru to be the active app.
             NSApp.activate(ignoringOtherApps: true)
             model.openTool = model.openTool == tool ? nil : tool
         }
@@ -200,7 +200,7 @@ struct RailView: View {
                 }
             }
             Divider()
-            Button("Salir de Simuru") { NSApp.terminate(nil) }
+            Button("Salir de Saguru") { NSApp.terminate(nil) }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 14, weight: .medium))

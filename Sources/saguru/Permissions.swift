@@ -107,7 +107,7 @@ enum Permission: String, CaseIterable, Identifiable {
 /// What an app says it will ask for. An app can only request a permission whose usage text it declares
 /// in its Info.plist, so this is the list that matters for that app.
 struct DeclaredPermissions: Equatable {
-    /// Permissions Simuru can change, with the choices that make sense for this app.
+    /// Permissions Saguru can change, with the choices that make sense for this app.
     var choices: [Permission: [Permission.Choice]] = [:]
     /// Declared permissions the simulator gives no way to change (camera, Face ID…).
     var fixed: [(name: String, symbol: String)] = []

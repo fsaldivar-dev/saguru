@@ -91,7 +91,7 @@ final class GridModel: ObservableObject {
     static let root = "pantalla"
 
     unowned let panel: PanelModel
-    private let queue = DispatchQueue(label: "simuru.grid")
+    private let queue = DispatchQueue(label: "saguru.grid")
     private var timer: Timer?
     private var reading = false
     private var nodes: [String: LayoutNode] = [:]
@@ -457,7 +457,7 @@ final class PaletteModel: ObservableObject {
     @Published var problem: String?
 
     unowned let panel: PanelModel
-    private let queue = DispatchQueue(label: "simuru.palette")
+    private let queue = DispatchQueue(label: "saguru.palette")
 
     init(panel: PanelModel) {
         self.panel = panel

@@ -1,17 +1,17 @@
 #!/bin/bash
-# Builds build/Simuru.app (the `simuru` CLI lives inside it).
+# Builds build/Saguru.app (the `saguru` CLI lives inside it).
 #   scripts/build.sh            build
 #   scripts/build.sh --install  build, then symlink the CLI into /usr/local/bin (or ~/.local/bin)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 swift build -c release
-BIN="$(swift build -c release --show-bin-path)/simuru"
+BIN="$(swift build -c release --show-bin-path)/saguru"
 
-APP="build/Simuru.app"
+APP="build/Saguru.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/simuru"
+cp "$BIN" "$APP/Contents/MacOS/saguru"
 
 # Icon: assets/icon_1024.png is the master (824 px tile centred on a transparent 1024 px canvas).
 # If it is missing, a placeholder is drawn by scripts/make-icon.swift.
@@ -26,20 +26,20 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET"
 
-# The network agent: a small library that Simuru loads into an app when it launches it in the simulator.
+# The network agent: a small library that Saguru loads into an app when it launches it in the simulator.
 xcrun -sdk iphonesimulator clang -arch arm64 -arch x86_64 -dynamiclib -fobjc-arc -O2 -mios-simulator-version-min=15.0 \
-  -framework Foundation agent/SimuruAgent.m -o "$APP/Contents/Resources/SimuruAgent.dylib"
+  -framework Foundation agent/SaguruAgent.m -o "$APP/Contents/Resources/SaguruAgent.dylib"
 
-# LSUIElement: no Dock icon, Simuru behaves as an extension of the Simulator.
+# LSUIElement: no Dock icon, Saguru behaves as an extension of the Simulator.
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Simuru</string>
-  <key>CFBundleDisplayName</key><string>Simuru</string>
-  <key>CFBundleIdentifier</key><string>dev.simuru.app</string>
-  <key>CFBundleExecutable</key><string>simuru</string>
+  <key>CFBundleName</key><string>Saguru</string>
+  <key>CFBundleDisplayName</key><string>Saguru</string>
+  <key>CFBundleIdentifier</key><string>dev.saguru.app</string>
+  <key>CFBundleExecutable</key><string>saguru</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
@@ -62,7 +62,7 @@ if [[ "${1:-}" == "--install" ]]; then
   DEST="/usr/local/bin"
   [[ -w "$DEST" ]] || DEST="$HOME/.local/bin"
   mkdir -p "$DEST"
-  ln -sf "$PWD/$APP/Contents/MacOS/simuru" "$DEST/simuru"
-  echo "OK  $DEST/simuru"
+  ln -sf "$PWD/$APP/Contents/MacOS/saguru" "$DEST/saguru"
+  echo "OK  $DEST/saguru"
   case ":$PATH:" in *":$DEST:"*) ;; *) echo "    (añade $DEST a tu PATH)";; esac
 fi

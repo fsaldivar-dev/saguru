@@ -118,7 +118,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
         if rail.frame != target { rail.setFrame(target, display: true) }
 
         // Sit directly above the Simulator in the window stack, so other apps cover both together.
-        // While the Simulator (or Simuru) is the front app, our windows simply float: nothing is
+        // While the Simulator (or Saguru) is the front app, our windows simply float: nothing is
         // reordered around the user's clicks. Behind another app they drop to the normal level and are
         // tucked just above the Simulator window, so that app covers both together.
         let front = NSWorkspace.shared.frontmostApplication?.bundleIdentifier

@@ -34,7 +34,7 @@ final class PanelModel: ObservableObject {
     @Published var status = ""
     @Published var cleanBar = false
     @Published var dropTargeted = false
-    /// Whether macOS lets Simuru see which simulator its window shows (needs Accessibility).
+    /// Whether macOS lets Saguru see which simulator its window shows (needs Accessibility).
     @Published var knowsWindowDevice = false
 
     // Accessibility
@@ -53,7 +53,7 @@ final class PanelModel: ObservableObject {
     @Published var screenPoints = CGSize(width: 402, height: 874)
 
     private var statusToken = 0
-    private let work = DispatchQueue(label: "simuru.work")
+    private let work = DispatchQueue(label: "saguru.work")
 
     var device: SimDevice? { devices.first { $0.udid == selected } }
     var app: SimApp? { apps.first { $0.bundleID == appID } }
@@ -156,7 +156,7 @@ final class PanelModel: ObservableObject {
     /// switch back and forth is not seen.
     @Published var freezeImage: NSImage?
 
-    private let splitQueue = DispatchQueue(label: "simuru.split")
+    private let splitQueue = DispatchQueue(label: "saguru.split")
     private var splitTimer: DispatchSourceTimer?
     /// Whether the comparison is on. Main thread only; a retake in flight checks it before showing anything.
     private var comparing = false
@@ -227,7 +227,7 @@ final class PanelModel: ObservableObject {
         do {
             let current = liveAppearance
             let other = current == "dark" ? "light" : "dark"
-            // If Simuru dies in the next second the simulator would be left in the wrong appearance:
+            // If Saguru dies in the next second the simulator would be left in the wrong appearance:
             // note what to put back, so the next launch can do it.
             UserDefaults.standard.set(current, forKey: "restoreAppearance.\(udid)")
             defer { UserDefaults.standard.removeObject(forKey: "restoreAppearance.\(udid)") }
@@ -448,7 +448,7 @@ final class PanelModel: ObservableObject {
     }
 
     /// What each simulator was last told to simulate, as text. The simulator cannot be asked, so this is
-    /// only what Simuru itself set during this session.
+    /// only what Saguru itself set during this session.
     @Published var simulatedLocations: [String: String] = [:]
 
     func setLocation(latitude: Double, longitude: Double) {
@@ -671,7 +671,7 @@ final class PanelModel: ObservableObject {
     func requireAccessibility() -> Bool {
         if SimulatorAX.trusted { return true }
         SimulatorAX.requestAccess()
-        say("Permite Accesibilidad para Simuru y vuelve a intentarlo")
+        say("Permite Accesibilidad para Saguru y vuelve a intentarlo")
         return false
     }
 

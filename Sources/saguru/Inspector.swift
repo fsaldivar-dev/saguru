@@ -333,7 +333,7 @@ final class InspectorModel: ObservableObject {
 
     unowned let panel: PanelModel
     private var screen = CGRect.zero
-    private let queue = DispatchQueue(label: "simuru.inspector")
+    private let queue = DispatchQueue(label: "saguru.inspector")
     private var reading = false
     private(set) var visible = false
 
@@ -366,7 +366,7 @@ final class InspectorModel: ObservableObject {
 
     func reload() {
         guard !reading else { return }
-        guard SimulatorAX.trusted else { problem = "Simuru necesita el permiso de Accesibilidad para leer la app."; return }
+        guard SimulatorAX.trusted else { problem = "Saguru necesita el permiso de Accesibilidad para leer la app."; return }
         guard let window = panel.simulatorWindow else { problem = "No hay ninguna ventana del Simulador a la vista."; return }
         reading = true
         queue.async {

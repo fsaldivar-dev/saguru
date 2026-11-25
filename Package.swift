@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "Simuru",
+    name: "Saguru",
     platforms: [.macOS(.v14)],
     targets: [
-        .executableTarget(name: "simuru", path: "Sources/simuru"),
+        .executableTarget(name: "saguru", path: "Sources/saguru"),
     ]
 )

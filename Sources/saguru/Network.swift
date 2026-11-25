@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-// The network monitor. There is no proxy and no certificate: Simuru launches the app with a small
-// library inside it (agent/SimuruAgent.m) that reports every URLSession request and can answer chosen
+// The network monitor. There is no proxy and no certificate: Saguru launches the app with a small
+// library inside it (agent/SaguruAgent.m) that reports every URLSession request and can answer chosen
 // ones with a saved response. The two talk through a folder (see the agent for the format).
 
 struct NetHeader: Codable, Identifiable, Equatable {
@@ -184,14 +184,14 @@ final class NetworkModel: ObservableObject {
             problem = "Elige una app en el riel para ver su red."
             return
         }
-        guard let agent = Bundle.main.resourceURL?.appendingPathComponent("SimuruAgent.dylib"),
+        guard let agent = Bundle.main.resourceURL?.appendingPathComponent("SaguruAgent.dylib"),
               FileManager.default.fileExists(atPath: agent.path) else {
-            problem = "Falta SimuruAgent.dylib en Simuru.app. Vuelve a construir con scripts/build.sh."
+            problem = "Falta SaguruAgent.dylib en Saguru.app. Vuelve a construir con scripts/build.sh."
             return
         }
         let bundleID = panel.appID
         loadMocksIfNeeded()
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("simuru-net/\(UUID().uuidString)")
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("saguru-net/\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         self.folder = folder
         clear()
@@ -204,7 +204,7 @@ final class NetworkModel: ObservableObject {
             let process = Simctl.process(["launch", "--terminate-running-process", udid, bundleID])
             var environment = ProcessInfo.processInfo.environment
             environment["SIMCTL_CHILD_DYLD_INSERT_LIBRARIES"] = agent.path
-            environment["SIMCTL_CHILD_SIMURU_NET_FOLDER"] = folder.path
+            environment["SIMCTL_CHILD_SAGURU_NET_FOLDER"] = folder.path
             process.environment = environment
             let errors = Pipe()
             process.standardOutput = Pipe()
@@ -302,7 +302,7 @@ final class NetworkModel: ObservableObject {
     private var store: URL? {
         guard !panel.appID.isEmpty, let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         else { return nil }
-        return support.appendingPathComponent("Simuru/mocks/\(panel.appID)")
+        return support.appendingPathComponent("Saguru/mocks/\(panel.appID)")
     }
 
     func bodyFile(of mock: NetMock) -> URL? { store?.appendingPathComponent("\(mock.id).body") }
@@ -426,7 +426,7 @@ final class NetworkWindow: NSObject, NSWindowDelegate {
             window.appearance = NSAppearance(named: .darkAqua)
             window.contentView = NSHostingView(rootView: NetworkView(model: panel.network, panel: panel))
             window.delegate = self
-            window.setFrameAutosaveName("simuru.network")
+            window.setFrameAutosaveName("saguru.network")
             if window.frame.origin == .zero { window.center() }
             self.window = window
             Self.installEditMenu()
@@ -440,13 +440,13 @@ final class NetworkWindow: NSObject, NSWindowDelegate {
         panel?.networkOpen = false
     }
 
-    /// Simuru has no menu bar of its own; without an Edit menu, ⌘C, ⌘V and ⌘A do nothing in a window.
+    /// Saguru has no menu bar of its own; without an Edit menu, ⌘C, ⌘V and ⌘A do nothing in a window.
     private static func installEditMenu() {
         guard NSApp.mainMenu == nil else { return }
         let main = NSMenu()
         let appItem = NSMenuItem()
         appItem.submenu = NSMenu()
-        appItem.submenu?.addItem(withTitle: "Salir de Simuru", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu?.addItem(withTitle: "Salir de Saguru", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(appItem)
         let editItem = NSMenuItem()
         let edit = NSMenu(title: "Edición")
@@ -542,7 +542,7 @@ struct NetworkView: View {
         VStack(spacing: 14) {
             Image(systemName: "network").font(.system(size: 34, weight: .light)).foregroundStyle(.secondary)
             Text("Mira lo que tu app le pide a la red").font(.title2.weight(.semibold))
-            Text("Simuru relanza la app y captura cada petición: URL, tiempo, cabeceras, cuerpo y respuesta.\nSin proxy ni certificados. Si la lanzas desde Xcode, vuelve a pulsar Capturar.")
+            Text("Saguru relanza la app y captura cada petición: URL, tiempo, cabeceras, cuerpo y respuesta.\nSin proxy ni certificados. Si la lanzas desde Xcode, vuelve a pulsar Capturar.")
                 .multilineTextAlignment(.center).foregroundStyle(.secondary).lineSpacing(3)
             Button("Capturar \(panel.app?.name ?? "")") { model.start() }
                 .buttonStyle(PrimaryButtonStyle())
