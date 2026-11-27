@@ -60,6 +60,8 @@ Every request with its method, status, time and size. Request and response side 
 
 Pick an image, your Mac's camera, an iPhone, or an Android phone over USB, and your app sees it as its own camera: live preview, frames for Vision and OCR, QR reading, photo capture, front and back cameras, and the system camera screen. Changing the source does not require relaunching the app.
 
+With images you can prepare one case per picture (an ID, something that is not one, a cropped one) and switch between them with a click or ⌘1…⌘9 while the app keeps running. The adjustments do what moving the phone would: zoom in or out, rotate, tilt in perspective, and drag the picture to move it. They apply to live cameras too.
+
 <p align="center">
   <img src="assets/camara.gif" alt="The app in the simulator receives a camera, reads a QR code and takes a photo" width="820">
 </p>

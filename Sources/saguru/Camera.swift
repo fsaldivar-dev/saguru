@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -67,6 +68,22 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     @Published var devices: [CameraDevice] = []
     @Published var preview: CGImage?
     @Published var imageURL: URL? { didSet { renderImage() } }
+    /// The pictures at hand: one is sent, and clicking another swaps it while the app keeps running.
+    @Published private(set) var images: [URL] = []
+    // How the picture sits in the frame, as if the phone moved: nearer or farther, turned, tilted, off to a side.
+    @Published var zoom = 1.0 { didSet { if zoom != oldValue { renderImage() } } }
+    /// Degrees, clockwise.
+    @Published var roll = 0.0 { didSet { if roll != oldValue { renderImage() } } }
+    /// Degrees the picture leans away, top to bottom and side to side.
+    @Published var pitch = 0.0 { didSet { if pitch != oldValue { renderImage() } } }
+    @Published var yaw = 0.0 { didSet { if yaw != oldValue { renderImage() } } }
+    /// Fractions of the frame, right and down.
+    @Published var offset = CGSize.zero { didSet { if offset != oldValue { renderImage() } } }
+    var isAdjusted: Bool { zoom != 1 || roll != 0 || pitch != 0 || yaw != 0 || offset != .zero }
+    static let zoomRange = 0.25...4.0
+
+    func resetAdjustments() { zoom = 1; roll = 0; pitch = 0; yaw = 0; offset = .zero }
+    func zoom(by factor: Double) { zoom = min(max(zoom * factor, Self.zoomRange.lowerBound), Self.zoomRange.upperBound) }
     @Published var problem: String?
     /// "udid|bundle" of the app that was launched with the camera.
     @Published private(set) var active: String?
@@ -79,7 +96,8 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     private let queue = DispatchQueue(label: "saguru.camera")
     private let context = CIContext()
     private var frames = 0
-    private var still: CIImage?
+    private var still: (url: URL, image: CIImage)?
+    private var thumbnails: [URL: CGImage] = [:]
     /// The frame size the app's camera session asked for, as the agent reports it (a phone held upright).
     private var want = (width: 1080, height: 1920)
     private var wantTimer: Timer?
@@ -87,7 +105,13 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     init(panel: PanelModel) {
         self.panel = panel
         super.init()
-        if let saved = UserDefaults.standard.string(forKey: "camera.image") { imageURL = URL(fileURLWithPath: saved) }
+        images = (UserDefaults.standard.stringArray(forKey: "camera.images") ?? []).map { URL(fileURLWithPath: $0) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        if let saved = UserDefaults.standard.string(forKey: "camera.image") {
+            let url = URL(fileURLWithPath: saved)
+            if !images.contains(url), FileManager.default.fileExists(atPath: saved) { images.insert(url, at: 0) }
+            imageURL = images.contains(url) ? url : images.first
+        } else { imageURL = images.first }
         wantTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in self?.readWant() }
     }
 
@@ -239,17 +263,47 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         }
     }
 
+    /// Sends this picture from now on, adding it to the ones at hand if it is new.
     func chooseImage(_ url: URL) {
+        if !images.contains(url) { images.append(url); saveImages() }
         UserDefaults.standard.set(url.path, forKey: "camera.image")
         imageURL = url
         source = .image
         renderImage()
     }
 
+    func addImages(_ urls: [URL]) {
+        let fresh = urls.filter { !images.contains($0) && (UTType(filenameExtension: $0.pathExtension)?.conforms(to: .image) ?? false) }
+        images += fresh
+        saveImages()
+        if let first = fresh.first ?? urls.first(where: images.contains) { chooseImage(first) }
+    }
+
+    func removeImage(_ url: URL) {
+        guard let index = images.firstIndex(of: url) else { return }
+        images.remove(at: index)
+        thumbnails[url] = nil
+        saveImages()
+        guard imageURL == url else { return }
+        if images.isEmpty { UserDefaults.standard.removeObject(forKey: "camera.image"); imageURL = nil }
+        else { chooseImage(images[min(index, images.count - 1)]) }
+    }
+
+    private func saveImages() { UserDefaults.standard.set(images.map(\.path), forKey: "camera.images") }
+
+    func thumbnail(for url: URL) -> CGImage? {
+        if let made = thumbnails[url] { return made }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 160] as CFDictionary) else { return nil }
+        thumbnails[url] = image
+        return image
+    }
+
     func pickImage() {
         let open = NSOpenPanel()
         open.allowedContentTypes = [.image]
-        if open.runModal() == .OK, let url = open.url { chooseImage(url) }
+        open.allowsMultipleSelection = true
+        if open.runModal() == .OK { addImages(open.urls) }
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -261,13 +315,23 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         guard source == .image else { return }
         let url = imageURL
         queue.async {
-            guard let url, let image = CIImage(contentsOf: url, options: [.applyOrientationProperty: true]) else {
+            guard let url, let image = self.loadStill(url) else {
                 DispatchQueue.main.async { self.preview = nil }
                 return
             }
             self.frames = 0
             self.send(image)
         }
+    }
+
+    /// The picture decoded once, no larger than is useful, so moving a slider does not read the file again.
+    private func loadStill(_ url: URL) -> CIImage? {
+        if let still, still.url == url { return still.image }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 3000] as CFDictionary) else { return nil }
+        let made = CIImage(cgImage: image)
+        still = (url, made)
+        return made
     }
 
     /// Crops and scales a picture to what the app will get, publishes it to the agent and to the panel.
@@ -280,10 +344,28 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         let width = want.width & ~1, height = want.height & ~1
         let bounds = CGRect(x: 0, y: 0, width: width, height: height)
         let across = CGFloat(width) / picture.extent.width, down = CGFloat(height) / picture.extent.height
-        let scale = framing == .fill ? max(across, down) : min(across, down)
-        picture = picture.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        picture = picture.transformed(by: CGAffineTransform(translationX: ((CGFloat(width) - picture.extent.width) / 2).rounded(), y: ((CGFloat(height) - picture.extent.height) / 2).rounded()))
-        picture = picture.composited(over: CIImage(color: .black)).cropped(to: bounds)
+        let scale = (framing == .fill ? max(across, down) : min(across, down)) * CGFloat(zoom)
+        // Where each corner of the picture lands: scaled, turned, leaned back in depth, then moved.
+        let size = picture.extent.size, canvas = CGSize(width: width, height: height)
+        let turn = -roll * .pi / 180, lean = pitch * .pi / 180, swing = yaw * .pi / 180
+        let depth = 1.2 * max(size.width * scale, size.height * scale, canvas.width, canvas.height)
+        let shift = offset
+        func place(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            let px = (x - size.width / 2) * scale, py = (y - size.height / 2) * scale
+            var a = px * cos(turn) - py * sin(turn), b = px * sin(turn) + py * cos(turn)
+            var z = -a * sin(swing)
+            a *= cos(swing)
+            let far = b * sin(lean) + z * cos(lean)
+            b = b * cos(lean) - z * sin(lean)
+            z = far
+            let near = depth / (depth + z)
+            return CGPoint(x: canvas.width / 2 + a * near + shift.width * canvas.width, y: canvas.height / 2 + b * near - shift.height * canvas.height)
+        }
+        let warp = CIFilter.perspectiveTransform()
+        warp.inputImage = picture
+        warp.topLeft = place(0, size.height); warp.topRight = place(size.width, size.height)
+        warp.bottomLeft = place(0, 0); warp.bottomRight = place(size.width, 0)
+        picture = (warp.outputImage ?? picture).composited(over: CIImage(color: .black)).cropped(to: bounds)
         channel?.write(width: width, height: height) { memory, row in
             context.render(picture, toBitmap: memory, rowBytes: row, bounds: bounds, format: .BGRA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
         }
@@ -339,11 +421,14 @@ struct CameraForm: View {
     var body: some View {
         FormBox(title: "Cámara", target: model) {
             HStack(alignment: .top, spacing: 20) {
-                picture
+                VStack(spacing: 10) {
+                    strip
+                    picture
+                }
                 VStack(alignment: .leading, spacing: 16) {
                     Labeled("Fuente") {
                         VStack(spacing: 4) {
-                            row("Imagen", detail: camera.imageURL?.lastPathComponent ?? "Elige o arrastra una", symbol: "photo", chosen: camera.source == .image) {
+                            row("Imagen", detail: camera.imageURL?.lastPathComponent ?? "Elige o arrastra una o varias", symbol: "photo", chosen: camera.source == .image) {
                                 if camera.imageURL == nil { camera.pickImage() } else { camera.source = .image }
                             }
                             ForEach(camera.devices) { device in
@@ -352,16 +437,14 @@ struct CameraForm: View {
                                     chosen: camera.source == (device.isAndroid ? .android(device.id) : .device(device.id))) { camera.choose(device) }
                             }
                         }
-                        if camera.source == .image { Button("Elegir otra imagen…") { camera.pickImage() }.controlSize(.small) }
                     }
                     Labeled("Encuadre") {
                         Picker("Encuadre", selection: $camera.framing) {
                             ForEach(CameraModel.Framing.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                         }
                         .pickerStyle(.segmented).labelsHidden()
-                        Button { camera.turns = (camera.turns + 1) % 4 } label: { Label("Girar", systemImage: "rotate.right") }
-                            .controlSize(.small)
                     }
+                    adjustments
                     Divider()
                     if camera.isActive {
                         Label("\(model.app?.name ?? "La app") ve esta cámara", systemImage: "checkmark.circle.fill")
@@ -422,6 +505,7 @@ struct CameraForm: View {
         "Visor y fotogramas en vivo",
         "Foto, con cámara trasera y frontal (la frontal, espejada en el visor)",
         "Tamaño del preset, giro y espejo de cada conexión",
+        "Varias imágenes para cambiar en vivo, con zoom, giro e inclinación",
         "Lectura de QR",
         "Pantalla de cámara del sistema (UIImagePickerController)",
         "Vision: códigos, texto, rectángulos y documentos",
@@ -435,6 +519,90 @@ struct CameraForm: View {
         "Android: solo cámara trasera, Android 12 o posterior",
     ]
 
+    /// Zoom, turn, tilt and position: what moving the phone would do, without moving anything.
+    private var adjustments: some View {
+        Labeled("Ajuste") {
+            HStack(spacing: 6) {
+                Button { camera.zoom(by: 1 / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }.help("Alejar").accessibilityLabel("Alejar")
+                Slider(value: Binding(get: { log2(camera.zoom) }, set: { camera.zoom = pow(2, $0) }), in: -2...2).accessibilityLabel("Zoom")
+                Button { camera.zoom(by: 1.25) } label: { Image(systemName: "plus.magnifyingglass") }.help("Acercar").accessibilityLabel("Acercar")
+                Text(String(format: "%.2f×", camera.zoom)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
+            }
+            dial("rotate.right", "Giro", $camera.roll, 180)
+            dial("rectangle.portrait.rotate", "Inclinación vertical", $camera.pitch, 60)
+            dial("rectangle.landscape.rotate", "Inclinación horizontal", $camera.yaw, 60)
+            HStack {
+                Button { camera.turns = (camera.turns + 1) % 4 } label: { Label("Girar 90°", systemImage: "rotate.right") }
+                Spacer()
+                Button("Restablecer") { camera.resetAdjustments() }.disabled(!camera.isAdjusted)
+            }
+            .controlSize(.small)
+            Text("Arrastra la vista para mover la imagen; pellizca para acercarla.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .buttonStyle(.borderless)
+    }
+
+    private func dial(_ symbol: String, _ name: String, _ value: Binding<Double>, _ limit: Double) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol).frame(width: 18).foregroundStyle(.secondary).help(name)
+            Slider(value: value, in: -limit...limit).accessibilityLabel(name)
+            Text(String(format: "%.0f°", value.wrappedValue)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
+        }
+    }
+
+    /// The pictures at hand. Clicking one sends it at once; ⌘1 to ⌘9 do the same from the keyboard.
+    private var strip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(camera.images.enumerated()), id: \.element) { index, url in
+                    let chosen = camera.source == .image && camera.imageURL == url
+                    let tile = Button { camera.chooseImage(url) } label: {
+                        VStack(spacing: 3) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.black)
+                                if let thumbnail = camera.thumbnail(for: url) {
+                                    Image(decorative: thumbnail, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                                }
+                            }
+                            .frame(width: 62, height: 62)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(chosen ? Color(nsColor: .systemBlue) : Color.white.opacity(0.14), lineWidth: chosen ? 2.5 : 1))
+                            Text(url.deletingPathExtension().lastPathComponent).font(.caption2).lineLimit(1).truncationMode(.middle)
+                                .foregroundStyle(chosen ? .primary : .secondary).frame(width: 66)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Imagen \(url.lastPathComponent)")
+                    .help(index < 9 ? "\(url.lastPathComponent) · ⌘\(index + 1)" : url.lastPathComponent)
+                    .contextMenu {
+                        Button("Quitar de la lista") { camera.removeImage(url) }
+                        Button("Mostrar en Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                    }
+                    if index < 9 { tile.keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command) } else { tile }
+                }
+                Button { camera.pickImage() } label: {
+                    VStack(spacing: 3) {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.white.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                            .frame(width: 62, height: 62)
+                            .overlay(Image(systemName: "plus").font(.system(size: 18, weight: .medium)).foregroundStyle(.secondary))
+                        Text("Añadir").font(.caption2).foregroundStyle(.secondary).frame(width: 66)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain).accessibilityLabel("Añadir imágenes")
+            }
+            .padding(.horizontal, 2)
+        }
+        .frame(height: 84)
+    }
+
+    @State private var dragStart: CGSize?
+    @State private var pinchStart: Double?
+    @State private var pictureSize = CGSize(width: 300, height: 300)
+
     private var picture: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.black)
@@ -444,7 +612,7 @@ struct CameraForm: View {
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "camera").font(.system(size: 30, weight: .light))
-                    Text("Arrastra aquí una imagen\no elige una cámara").multilineTextAlignment(.center)
+                    Text("Arrastra aquí una o varias imágenes\no elige una cámara").multilineTextAlignment(.center)
                 }
                 .foregroundStyle(.secondary)
             }
@@ -452,10 +620,36 @@ struct CameraForm: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(dropping ? Color(nsColor: .systemBlue) : Color.white.opacity(0.12), lineWidth: dropping ? 2 : 1))
         .frame(maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
-        .onDrop(of: [.fileURL], isTargeted: $dropping) { providers in
-            _ = providers.first?.loadObject(ofClass: URL.self) { url, _ in
-                if let url { DispatchQueue.main.async { camera.chooseImage(url) } }
+        .background(GeometryReader { box in Color.clear.onAppear { pictureSize = box.size }.onChange(of: box.size) { pictureSize = $0 } })
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 2)
+            .onChanged { drag in
+                let start = dragStart ?? camera.offset
+                dragStart = start
+                // The frame is shown fitted inside this view: a drag is measured against the frame as drawn.
+                let frame = camera.preview.map { CGSize(width: $0.width, height: $0.height) } ?? pictureSize
+                let fitted = min(pictureSize.width / frame.width, pictureSize.height / frame.height)
+                camera.offset = CGSize(width: start.width + drag.translation.width / (frame.width * fitted),
+                                       height: start.height + drag.translation.height / (frame.height * fitted))
             }
+            .onEnded { _ in dragStart = nil })
+        .simultaneousGesture(MagnificationGesture()
+            .onChanged { pinch in
+                let start = pinchStart ?? camera.zoom
+                pinchStart = start
+                camera.zoom = min(max(start * pinch, CameraModel.zoomRange.lowerBound), CameraModel.zoomRange.upperBound)
+            }
+            .onEnded { _ in pinchStart = nil })
+        .onDrop(of: [.fileURL], isTargeted: $dropping) { providers in
+            let group = DispatchGroup()
+            var urls: [URL] = []
+            for provider in providers {
+                group.enter()
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    DispatchQueue.main.async { if let url { urls.append(url) }; group.leave() }
+                }
+            }
+            group.notify(queue: .main) { camera.addImages(urls) }
             return true
         }
     }

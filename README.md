@@ -71,6 +71,11 @@ en vivo, fotogramas para Vision y OCR, lectura de QR, foto, cámara frontal y tr
 sistema. Cambiar de fuente no requiere relanzar la app. Saguru encuadra la imagen al tamaño que pide tu app, rellenando el cuadro o
 mostrándola completa.
 
+Con imágenes puedes preparar un caso por foto (una identificación, algo que no lo es, una recortada) y cambiar de
+una a otra con un clic o con ⌘1…⌘9 mientras la app sigue abierta. Los ajustes hacen lo que haría mover el teléfono:
+acercar o alejar, girar, inclinar en perspectiva y desplazar la imagen arrastrándola. También se aplican a las
+cámaras en vivo.
+
 <p align="center">
   <img src="assets/camara.gif" alt="La app del simulador recibe una cámara, lee un QR y toma una foto" width="820">
 </p>
