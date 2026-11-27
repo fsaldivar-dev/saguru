@@ -7,13 +7,23 @@ struct DrawerView: View {
     @ObservedObject var model: PanelModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            ToolBar(model: model)
-            Rectangle().fill(.white.opacity(0.09)).frame(height: 1)
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        ZStack {
+            // One or the other: a field of the panel left underneath would keep the keyboard and show its focus ring.
+            if model.onboarding {
+                OnboardingView(model: model).transition(.opacity)
+            } else {
+                VStack(spacing: 0) {
+                    ToolBar(model: model)
+                    Rectangle().fill(.white.opacity(0.09)).frame(height: 1)
+                    content
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+                .transition(.opacity)
+            }
         }
         .frame(minWidth: 590)
+        // Escape leaves the full-screen panel, as it does a full-screen window.
+        .onExitCommand { if model.expanded { model.expanded = false } }
         .modifier(MediaDrop(model: model))
         .background(Color(red: 0.13, green: 0.13, blue: 0.145))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))

@@ -46,6 +46,10 @@ luz, repetir. Con Saguru 0.2 lo haces sentado, y en segundos:
   <img src="assets/giroscopio.gif" alt="Se cambia de imagen y se gira e inclina la credencial con el giroscopio; la app lo recibe en vivo" width="900">
 </p>
 
+> **La primera vez**, Saguru te recibe con una introducción de cuatro pasos. Y cuando una herramienta necesita
+> espacio (la red, el registro, los datos), el botón de ampliar pone a Saguru a pantalla completa con el simulador
+> embebido a un lado; al reducir, el simulador vuelve a su sitio.
+
 ## Por qué Saguru
 
 - **No toca tu app.** No hay SDK que integrar ni código que añadir. Lo que necesita estar dentro de la app (red y

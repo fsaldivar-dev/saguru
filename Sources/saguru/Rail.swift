@@ -175,6 +175,8 @@ struct ToolBar: View {
             RailButton(model: model, symbol: "ruler", name: "Reglas", active: model.measuring) { model.toggleMeasuring() }
             RailPopover(model: model, tool: .colors, symbol: "eyedropper", name: "Colores") { EmptyView() }
             Spacer(minLength: 8)
+            RailButton(model: model, symbol: model.expanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                       name: model.expanded ? "Reducir el panel" : "Ampliar a pantalla completa", active: model.expanded) { model.expanded.toggle() }
             menu
         }
         .padding(.horizontal, 8)
@@ -197,6 +199,9 @@ struct ToolBar: View {
                     Text("\(device.udid == model.selected ? "✓ " : "")\(device.name) · \(device.runtime)")
                 }
             }
+            Divider()
+            Button(model.expanded ? "Reducir el panel" : "Ampliar a pantalla completa") { model.expanded.toggle() }
+            Button("Ver la introducción") { model.onboarding = true }
             Divider()
             Button("Salir de Saguru") { NSApp.terminate(nil) }
         } label: {

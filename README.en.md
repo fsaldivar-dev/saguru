@@ -42,6 +42,8 @@ Testing a capture flow used to mean printing the ID, holding the phone, tilting 
   <img src="assets/giroscopio.gif" alt="Switching pictures, then rotating and tilting the ID with the gyroscope while the app receives it live" width="900">
 </p>
 
+> **The first time**, Saguru greets you with a four-step introduction. And when a tool needs room (the network, the log, an app's data), the expand button takes Saguru full screen with the simulator set into one side; reduce it and the simulator goes back where it was.
+
 ## Why Saguru
 
 - **It does not touch your app.** No SDK to integrate and no code to add. What has to live inside the app (network and camera) is loaded only when Saguru launches it, and only in the simulator.

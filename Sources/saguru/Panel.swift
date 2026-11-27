@@ -158,18 +158,46 @@ final class PanelController: NSObject, NSApplicationDelegate {
     }
 
     /// The docked panel sits beyond the rail, as tall as the Simulator window, and the tray goes behind all three.
+    private var shownExpanded = false
+    /// Where the Simulator's window was (top-left coordinates) before the panel was expanded.
+    private var restoreTo: CGPoint?
+
     private func followDrawer(_ window: SimWindow, screen: NSScreen?, above: Set<Int>) {
         let gap: CGFloat = 6
         let railOnRight = rail.frame.minX >= window.frame.midX
         var united = window.frame
+        let visible = screen?.visibleFrame ?? window.frame
+        // Only an open panel can be expanded: folded, the Simulator goes back where it was.
+        let expanded = model.expanded && model.openTool != nil
+        if expanded != shownExpanded {
+            let screenTop = NSScreen.screens.first?.frame.maxY ?? visible.maxY
+            if expanded {
+                restoreTo = window.topLeft.origin
+                SimulatorAX.move(windowAt: window.topLeft, to: CGPoint(x: visible.minX + 18, y: screenTop - visible.maxY + 14))
+            } else if let restoreTo {
+                SimulatorAX.move(windowAt: window.topLeft, to: restoreTo)
+                self.restoreTo = nil
+            }
+        }
         if model.openTool != nil {
-            let visible = screen?.visibleFrame ?? window.frame
             let room = railOnRight ? visible.maxX - window.frame.maxX - gap - 10 : window.frame.minX - gap - 10 - visible.minX
             let width = min(drawerHost.fittingSize.width, max(room, 320))
             let height = max(window.frame.height, 360)
             let x = railOnRight ? window.frame.maxX + gap : window.frame.minX - gap - width
-            let target = NSRect(x: x, y: window.frame.maxY - height, width: width, height: height)
-            if drawer.frame != target { drawer.setFrame(target, display: true) }
+            // Expanded, Saguru takes the whole screen with the Simulator set into it: the Simulator goes to
+            // the left edge and the tools fill everything beside it. Its old place is kept to put it back.
+            var target = NSRect(x: x, y: window.frame.maxY - height, width: width, height: height)
+            if expanded {
+                // Beside the Simulator wherever it is (it may not have been allowed to move), on its roomier side.
+                let onRight = visible.maxX - window.frame.maxX >= window.frame.minX - visible.minX
+                let from = onRight ? window.frame.maxX + gap : visible.minX + 14
+                let to = onRight ? visible.maxX - 14 : window.frame.minX - gap
+                target = NSRect(x: from, y: visible.minY + 14, width: max(to - from, 320), height: visible.height - 28)
+            }
+            if drawer.frame != target {
+                // The change of size is shown as one; following the Simulator's window as it is dragged is not.
+                drawer.setFrame(target, display: true, animate: expanded != shownExpanded && drawer.isVisible)
+            }
             if model.openTool != shownTool {
                 // Typing in a form needs Saguru to be the active app and the panel its key window.
                 NSApp.activate(ignoringOtherApps: true)
@@ -178,11 +206,13 @@ final class PanelController: NSObject, NSApplicationDelegate {
                 drawer.orderFrontRegardless()
             }
             if !floating, !above.contains(drawer.windowNumber) { drawer.order(.above, relativeTo: window.number) }
-            united = united.union(target)
+            // The tray behind both: around the two of them, or the whole screen when expanded.
+            united = expanded ? visible.insetBy(dx: 12, dy: 12) : united.union(target)
         } else {
             if drawer.isVisible { drawer.orderOut(nil) }
             united = united.union(rail.frame)
         }
+        shownExpanded = expanded
         let changed = model.openTool != shownTool
         shownTool = model.openTool
 

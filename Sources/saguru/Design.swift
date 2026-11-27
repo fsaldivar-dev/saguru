@@ -26,6 +26,21 @@ enum SimulatorAX {
         return CGRect(origin: origin, size: extent)
     }
 
+    /// Moves the Simulator window found at `windowFrame` (top-left screen coordinates) to another place.
+    /// Returns false when Saguru may not, or the window is not there.
+    @discardableResult
+    static func move(windowAt windowFrame: CGRect, to origin: CGPoint) -> Bool {
+        guard trusted, let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.iphonesimulator").first else { return false }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        for window in (attribute(root, kAXWindowsAttribute) as? [AXUIElement]) ?? [] {
+            guard let frame = frame(window), abs(frame.minX - windowFrame.minX) < 3, abs(frame.minY - windowFrame.minY) < 3 else { continue }
+            var point = origin
+            guard let value = AXValueCreate(.cgPoint, &point) else { return false }
+            return AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, value) == .success
+        }
+        return false
+    }
+
     /// Title and device-screen rectangle (top-left screen coordinates) of the Simulator window at `windowFrame`.
     static func window(at windowFrame: CGRect) -> (title: String, screen: CGRect?)? {
         guard trusted, let app = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.iphonesimulator").first

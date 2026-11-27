@@ -36,6 +36,11 @@ xcrun -sdk iphonesimulator clang -arch arm64 -arch x86_64 -dynamiclib -fobjc-arc
 cp vendor/scrcpy/scrcpy-server "$APP/Contents/Resources/scrcpy-server"
 cp vendor/scrcpy/VERSION "$APP/Contents/Resources/scrcpy-server.version"
 cp vendor/scrcpy/LICENSE "$APP/Contents/Resources/scrcpy-LICENSE.txt"
+# The pictures of the introduction shown the first time the panel is unfolded.
+if compgen -G "assets/onboarding/*.jpg" >/dev/null; then
+  mkdir -p "$APP/Contents/Resources/onboarding"
+  cp assets/onboarding/*.jpg "$APP/Contents/Resources/onboarding/"
+fi
 
 # LSUIElement: no Dock icon, Saguru behaves as an extension of the Simulator.
 cat > "$APP/Contents/Info.plist" <<'PLIST'

@@ -28,6 +28,10 @@ final class PanelModel: ObservableObject {
     @Published var openTool: Tool? {
         didSet { if let openTool { lastTool = openTool } }
     }
+    /// The panel takes the whole screen, for the tools that need room (the network, the log, an app's data).
+    @Published var expanded = false
+    /// The introduction is showing: the first time, or when asked for from the menu.
+    @Published var onboarding = !UserDefaults.standard.bool(forKey: "onboarding.done")
     /// What the panel shows when it is unfolded again.
     var lastTool = Tool.context
 
