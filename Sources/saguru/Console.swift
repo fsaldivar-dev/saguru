@@ -36,12 +36,17 @@ struct CrashReport: Equatable {
 }
 
 final class ConsoleModel: ObservableObject {
-    @Published private(set) var lines: [LogLine] = []
+    /// Not published: the system can log thousands of lines a second, and telling the view about each one
+    /// would stall it. `revision` moves a few times a second instead, when there is something new.
+    private(set) var lines: [LogLine] = []
+    @Published private(set) var revision = 0
+    private var dirty = false
+    private var flusher: Timer?
     @Published private(set) var crash: CrashReport?
     /// The app closed with an error and the tool has not been opened since.
     @Published var unseen = false
     /// Everything the system logs for the process, not only what the app prints and its errors.
-    @Published var showSystem = false
+    @Published var showSystem = false { didSet { dirty = true } }
     @Published private(set) var appName = ""
 
     unowned let panel: PanelModel
@@ -55,7 +60,14 @@ final class ConsoleModel: ObservableObject {
     private var udid = ""
     private static let limit = 6000
 
-    init(panel: PanelModel) { self.panel = panel }
+    init(panel: PanelModel) {
+        self.panel = panel
+        flusher = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+            guard let self, self.dirty else { return }
+            self.dirty = false
+            self.revision += 1
+        }
+    }
 
     var shown: [LogLine] { showSystem ? lines : lines.filter { $0.kind != .system } }
 
@@ -66,6 +78,7 @@ final class ConsoleModel: ObservableObject {
         pid = 0
         rest = Data()
         lines = []
+        dirty = true
         crash = nil
         unseen = false
         count = 0
@@ -98,7 +111,7 @@ final class ConsoleModel: ObservableObject {
         appName = name
         launchedAt = Date()
         add("\(name) lanzada por Saguru · proceso \(pid)", .note)
-        let process = Simctl.process(["spawn", udid, "log", "stream", "--style", "compact", "--level", "debug", "--predicate", "processIdentifier == \(pid)"])
+        let process = Simctl.process(["spawn", udid, "log", "stream", "--style", "compact", "--level", "info", "--predicate", "processIdentifier == \(pid)"])
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
@@ -195,7 +208,7 @@ final class ConsoleModel: ObservableObject {
         }
     }
 
-    func clear() { lines = []; count = 0 }
+    func clear() { lines = []; dirty = true }
 
     private func stopStream() {
         stream?.terminate()
@@ -206,7 +219,8 @@ final class ConsoleModel: ObservableObject {
     private func add(_ text: String, _ kind: LogLine.Kind) {
         count += 1
         lines.append(LogLine(id: count, text: text, kind: kind))
-        if lines.count > Self.limit { lines.removeFirst(lines.count - Self.limit) }
+        if lines.count > Self.limit { lines.removeFirst(lines.count - Self.limit + 500) }
+        dirty = true
     }
 
     /// Lines look like "2026-11-27 11:36:36.036 E  App[123:abc] [subsystem:category] message".
@@ -284,7 +298,8 @@ struct ConsoleView: View {
     @State private var filter = ""
     @State private var wholeStack = false
 
-    private var visible: [LogLine] {
+    /// What the log shows right now, for copying. Asked for only then: it can be thousands of lines.
+    private func visible() -> [LogLine] {
         let all = console.shown
         return filter.isEmpty ? all : all.filter { $0.text.localizedCaseInsensitiveContains(filter) }
     }
@@ -298,7 +313,7 @@ struct ConsoleView: View {
                     TextField("Filtrar", text: $filter).textFieldStyle(.plain)
                     Toggle("Sistema", isOn: $console.showSystem).toggleStyle(.checkbox)
                         .help("Incluye todo lo que el sistema registra para la app, no solo lo que imprime y sus errores")
-                    Button("Copiar") { copy(visible.map(\.text).joined(separator: "\n")) }.disabled(visible.isEmpty)
+                    Button("Copiar") { copy(visible().map(\.text).joined(separator: "\n")) }.disabled(console.lines.isEmpty)
                     Button("Limpiar") { console.clear() }.disabled(console.lines.isEmpty)
                     Button(panel.agentAlive ? "Relanzar" : "Lanzar con registro") { launch() }.disabled(panel.app == nil)
                 }
@@ -335,31 +350,9 @@ struct ConsoleView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 1) {
-                        ForEach(visible) { line in
-                            Text(line.text).font(.system(size: 11, design: .monospaced)).foregroundStyle(color(line.kind))
-                                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).id(line.id)
-                        }
-                    }
-                    .padding(10)
-                }
+            LogText(console: console, revision: console.revision, filter: filter, system: console.showSystem)
                 .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .onChange(of: console.lines.last?.id) { last in if let last { proxy.scrollTo(last, anchor: .bottom) } }
-                .onAppear { if let last = visible.last?.id { proxy.scrollTo(last, anchor: .bottom) } }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private func color(_ kind: LogLine.Kind) -> Color {
-        switch kind {
-        case .output: return .primary
-        case .error: return Color(nsColor: .systemOrange)
-        case .fault: return Color(nsColor: .systemRed)
-        case .system: return .secondary
-        case .note: return Color(nsColor: .systemBlue)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -403,5 +396,75 @@ struct ConsoleView: View {
         .padding(12)
         .background(Color(nsColor: .systemRed).opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color(nsColor: .systemRed).opacity(0.35)))
+    }
+}
+
+/// The log as one text view. A list of SwiftUI texts cannot keep up with a busy app; a text view takes
+/// thousands of lines, and only the new ones are added each time.
+struct LogText: NSViewRepresentable {
+    let console: ConsoleModel
+    let revision: Int
+    let filter: String
+    let system: Bool
+
+    final class Coordinator {
+        var last = 0            // id of the last line drawn
+        var filter = ""
+        var system = false
+        var drawn = 0           // lines in the view
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSTextView.scrollableTextView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        if let view = scroll.documentView as? NSTextView {
+            view.isEditable = false
+            view.isSelectable = true
+            view.drawsBackground = false
+            view.textContainerInset = NSSize(width: 8, height: 8)
+            view.isAutomaticLinkDetectionEnabled = false
+            view.layoutManager?.allowsNonContiguousLayout = true
+        }
+        return scroll
+    }
+
+    private static let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+    private static func color(_ kind: LogLine.Kind) -> NSColor {
+        switch kind {
+        case .output: return .labelColor
+        case .error: return .systemOrange
+        case .fault: return .systemRed
+        case .system: return .secondaryLabelColor
+        case .note: return .systemBlue
+        }
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let view = scroll.documentView as? NSTextView, let storage = view.textStorage else { return }
+        let state = context.coordinator
+        let lines = console.lines
+        // Start over when what is shown changes shape: another filter, the log cleared or trimmed, a new launch.
+        let restart = state.filter != filter || state.system != system || (lines.first?.id ?? 0) > state.last + 1 || lines.isEmpty || state.drawn > 9000
+        let last = state.last
+        let fresh: ArraySlice<LogLine> = restart ? lines.suffix(4000) : lines[(lines.lastIndex(where: { $0.id <= last }).map { $0 + 1 } ?? 0)...]
+        let chosen = fresh.filter { (system || $0.kind != .system) && (filter.isEmpty || $0.text.localizedCaseInsensitiveContains(filter)) }
+        guard restart || !chosen.isEmpty else { state.last = lines.last?.id ?? state.last; return }
+
+        let visible = scroll.contentView.bounds
+        let atEnd = restart || visible.maxY >= (view.frame.height - 24)
+        let added = NSMutableAttributedString()
+        for line in chosen {
+            added.append(NSAttributedString(string: line.text + "\n", attributes: [.font: Self.font, .foregroundColor: Self.color(line.kind)]))
+        }
+        storage.beginEditing()
+        if restart { storage.setAttributedString(added); state.drawn = chosen.count } else { storage.append(added); state.drawn += chosen.count }
+        storage.endEditing()
+        state.last = lines.last?.id ?? 0
+        state.filter = filter
+        state.system = system
+        if atEnd { view.scrollToEndOfDocument(nil) }
     }
 }
