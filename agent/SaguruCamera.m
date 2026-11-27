@@ -20,6 +20,7 @@
 #import <objc/message.h>
 #import <sys/mman.h>
 #import <fcntl.h>
+#import <dlfcn.h>
 
 static NSString *gFramePath;
 static const uint8_t *gMap;
@@ -70,7 +71,6 @@ static char kInputs, kOutputs, kRunning, kTypes, kSub, kBusy, kPickerCamera, kPi
 // AVFoundation asks a format for its inner description (when making default photo settings, for one).
 // There is none here, and it copes with nil the same way it does with a camera that has no format.
 - (id)figCaptureSourceVideoFormat { return nil; }
-- (void)dealloc {}
 @end
 static id Format(void) { static id f; static dispatch_once_t once; dispatch_once(&once, ^{ f = class_createInstance(SaguruFormat.class, 0); }); return f; }
 
@@ -147,14 +147,12 @@ static id Format(void) { static id f; static dispatch_once_t once; dispatch_once
 - (void)setActiveVideoMaxFrameDuration:(CMTime)t {}
 - (NSArray *)constituentDevices { return @[]; }
 - (BOOL)isVirtualDevice { return NO; }
-- (void)dealloc {}
 @end
 
 @interface SaguruInput : AVCaptureDeviceInput @property (nonatomic, strong) AVCaptureDevice *fake; @end
 @implementation SaguruInput
 - (AVCaptureDevice *)device { return self.fake; }
 - (NSArray *)ports { return @[]; }
-- (void)dealloc {}
 @end
 
 /// The link between the camera and one output or preview layer. Apps use it to turn the picture
@@ -193,7 +191,6 @@ static id Format(void) { static id f; static dispatch_once_t once; dispatch_once
 - (void)setVideoMinFrameDuration:(CMTime)t {}
 - (void)setVideoMaxFrameDuration:(CMTime)t {}
 - (BOOL)isCameraIntrinsicMatrixDeliverySupported { return NO; }
-- (void)dealloc {}
 @end
 
 /// What a photo request was resolved to; photo delegates get it with every call.
@@ -210,7 +207,6 @@ static id Format(void) { static id f; static dispatch_once_t once; dispatch_once
 - (CMVideoDimensions)deferredPhotoProxyDimensions { return (CMVideoDimensions){0, 0}; }
 - (CMTimeRange)photoProcessingTimeRange { return kCMTimeRangeZero; }
 - (NSUInteger)expectedPhotoCount { return 1; }
-- (void)dealloc {}
 @end
 
 @interface SaguruCode : AVMetadataMachineReadableCodeObject
@@ -239,7 +235,7 @@ static id Format(void) { static id f; static dispatch_once_t once; dispatch_once
 - (AVCaptureResolvedPhotoSettings *)resolvedSettings { return self.resolved; }
 - (NSInteger)photoCount { return 1; }
 - (NSInteger)sequenceCount { return 1; }
-- (void)dealloc { if (_image) CGImageRelease(_image); }
+- (void)saguruCleanUp { if (_image) { CGImageRelease(_image); _image = NULL; } }
 - (BOOL)isRawPhoto { return NO; }
 - (CMTime)timestamp { return CMClockGetTime(CMClockGetHostTimeClock()); }
 @end
@@ -326,6 +322,8 @@ static void FindCodes(void) {
 
 // MARK: Feeding
 
+static NSArray *Listed(id session, char *key);
+
 static SaguruConnection *ConnectionOf(id owner) { return objc_getAssociatedObject(owner, &kConn); }
 /// Outputs start lying on their side like the sensor (0°); a preview layer starts upright (90°).
 static SaguruConnection *ConnectionFor(id owner) {
@@ -338,7 +336,7 @@ static SaguruConnection *ConnectionFor(id owner) {
 /// Quarter turns to the right that take the upright picture to a connection's angle.
 static int Turns(CGFloat angle) { return (((int)lround(angle / 90) - 1) % 4 + 4) % 4; }
 static BOOL UsesFront(AVCaptureSession *session) {
-    for (id input in [objc_getAssociatedObject(session, &kInputs) copy]) if ([input isKindOfClass:SaguruInput.class] && ((SaguruInput *)input).fake.position == AVCaptureDevicePositionFront) return YES;
+    for (id input in Listed(session, &kInputs)) if ([input isKindOfClass:SaguruInput.class] && ((SaguruInput *)input).fake.position == AVCaptureDevicePositionFront) return YES;
     return NO;
 }
 
@@ -378,9 +376,11 @@ static void Tick(void) {
     if (!gPixels) return;
     static NSInteger count; count++;
     if (count % 12 == 0) FindCodes();
-    for (AVCaptureSession *session in gSessions.allObjects) {
+    NSArray *sessions;
+    @synchronized (gSessions) { sessions = gSessions.allObjects; }
+    for (AVCaptureSession *session in sessions) {
         if (![objc_getAssociatedObject(session, &kRunning) boolValue]) continue;
-        for (AVCaptureOutput *output in [objc_getAssociatedObject(session, &kOutputs) copy]) {
+        for (AVCaptureOutput *output in Listed(session, &kOutputs)) {
             SaguruConnection *connection = ConnectionOf(output);
             if (connection.off) continue;
             if ([output isKindOfClass:AVCaptureVideoDataOutput.class]) {
@@ -456,14 +456,18 @@ __attribute__((ns_returns_retained)) static id InputInit(__attribute__((ns_consu
     SaguruInput *i = Bare(SaguruInput.class); i.fake = d; return i;
 }
 
+// The app adds and removes inputs and outputs on its own threads while the feeder reads the same lists, so
+// every touch of them, and of the table of sessions, goes through one lock.
 static NSMutableArray *List(id session, char *key) { NSMutableArray *a = objc_getAssociatedObject(session, key); if (!a) { a = [NSMutableArray array]; objc_setAssociatedObject(session, key, a, OBJC_ASSOCIATION_RETAIN); [gSessions addObject:session]; } return a; }
+static NSArray *Listed(id session, char *key) { @synchronized (gSessions) { return [objc_getAssociatedObject(session, key) copy] ?: @[]; } }
 static BOOL CanAdd(id s, SEL c, id x) { return YES; }
-static void AddInput(id s, SEL c, id x) { if (x && ![List(s, &kInputs) containsObject:x]) [List(s, &kInputs) addObject:x]; }
-static void AddOutput(id s, SEL c, id x) { if (x && ![List(s, &kOutputs) containsObject:x]) { [List(s, &kOutputs) addObject:x]; objc_setAssociatedObject(x, &kAdded, @YES, OBJC_ASSOCIATION_RETAIN); } }
-static void Remove(id s, SEL c, id x) { [(NSMutableArray *)objc_getAssociatedObject(s, &kInputs) removeObject:x]; [(NSMutableArray *)objc_getAssociatedObject(s, &kOutputs) removeObject:x]; if (x) objc_setAssociatedObject(x, &kAdded, nil, OBJC_ASSOCIATION_RETAIN); }
+static void AddInput(id s, SEL c, id x) { @synchronized (gSessions) { if (x && ![List(s, &kInputs) containsObject:x]) [List(s, &kInputs) addObject:x]; } }
+static void AddOutput(id s, SEL c, id x) { @synchronized (gSessions) { if (x && ![List(s, &kOutputs) containsObject:x]) { [List(s, &kOutputs) addObject:x]; objc_setAssociatedObject(x, &kAdded, @YES, OBJC_ASSOCIATION_RETAIN); } } }
+static void Remove(id s, SEL c, id x) { @synchronized (gSessions) { [(NSMutableArray *)objc_getAssociatedObject(s, &kInputs) removeObject:x]; }
+    @synchronized (gSessions) { [(NSMutableArray *)objc_getAssociatedObject(s, &kOutputs) removeObject:x]; if (x) objc_setAssociatedObject(x, &kAdded, nil, OBJC_ASSOCIATION_RETAIN); } }
 // Read-only: a session being destroyed asks for these, and must not be registered again then.
-static NSArray *Inputs(id s, SEL c) { return [objc_getAssociatedObject(s, &kInputs) copy] ?: @[]; }
-static NSArray *Outputs(id s, SEL c) { return [objc_getAssociatedObject(s, &kOutputs) copy] ?: @[]; }
+static NSArray *Inputs(id s, SEL c) { return Listed(s, &kInputs); }
+static NSArray *Outputs(id s, SEL c) { return Listed(s, &kOutputs); }
 /// The picture size each preset stands for on a phone held upright (the sensor's are these, lying down).
 /// 4K is answered with 1080p: the Simulator would spend its time scaling.
 static void Want(AVCaptureSessionPreset preset) {
@@ -483,7 +487,8 @@ static AVCaptureSessionPreset Preset(id s, SEL c) { return objc_getAssociatedObj
 static void SetPreset(id s, SEL c, AVCaptureSessionPreset preset) { objc_setAssociatedObject(s, &kPreset, [preset copy], OBJC_ASSOCIATION_RETAIN); Want(preset); }
 static void Announce(id session, NSNotificationName name) { dispatch_async(dispatch_get_main_queue(), ^{ [NSNotificationCenter.defaultCenter postNotificationName:name object:session]; }); }
 static void Start(id s, SEL c) {
-    List(s, &kOutputs); Want(Preset(s, c));
+    @synchronized (gSessions) { List(s, &kOutputs); }
+    Want(Preset(s, c));
     if ([objc_getAssociatedObject(s, &kRunning) boolValue]) return;
     objc_setAssociatedObject(s, &kRunning, @YES, OBJC_ASSOCIATION_RETAIN);
     NSLog(@"Saguru camera: session started (%d×%d)", gWantW, gWantH);
@@ -732,6 +737,20 @@ static void Net(Class ours, Class theirs) {
     }
 }
 
+/// How a pretend object goes away. Written `- (void)dealloc {}`, the compiler still calls Apple's dealloc
+/// after it, and that one reads inner state the object never had: an app crashed with a bad memory access
+/// the moment it let go of its preview layer. This releases what the object holds and frees it, and
+/// Apple's dealloc is never reached.
+static void BareDealloc(__unsafe_unretained id object, SEL command) {
+    if ([object respondsToSelector:@selector(saguruCleanUp)]) [object performSelector:@selector(saguruCleanUp)];
+    // The runtime's own way of freeing an instance; the compiler hides it from code it manages memory for.
+    static void *(*dispose)(void *);
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ dispose = dlsym(RTLD_DEFAULT, "object_dispose"); });
+    if (dispose) dispose((__bridge void *)object);
+}
+static void Mortal(Class ours) { class_replaceMethod(ours, sel_registerName("dealloc"), (IMP)BareDealloc, "v@:"); }
+
 __attribute__((constructor)) static void SaguruCameraLoad(void) {
     const char *folder = getenv("SAGURU_CAM_FOLDER");
     if (!folder) return;
@@ -741,6 +760,7 @@ __attribute__((constructor)) static void SaguruCameraLoad(void) {
     Net(SaguruInput.class, AVCaptureDeviceInput.class); Net(SaguruConnection.class, AVCaptureConnection.class);
     Net(SaguruPhoto.class, AVCapturePhoto.class); Net(SaguruResolved.class, AVCaptureResolvedPhotoSettings.class);
     Net(SaguruCode.class, AVMetadataMachineReadableCodeObject.class);
+    for (Class bare in @[SaguruCamera.class, SaguruFormat.class, SaguruInput.class, SaguruConnection.class, SaguruPhoto.class, SaguruResolved.class, SaguruCode.class]) Mortal(bare);
     gContext = [CIContext context];
     gDetect = dispatch_queue_create("dev.saguru.camera.codes", DISPATCH_QUEUE_SERIAL);
     gSessions = [NSHashTable weakObjectsHashTable]; gLayers = [NSHashTable weakObjectsHashTable];
