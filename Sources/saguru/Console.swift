@@ -378,7 +378,7 @@ struct ConsoleView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            LogText(console: console, revision: console.revision, filter: filter, system: console.showSystem)
+            LogText(lines: console.lines, revision: console.revision, filter: filter, system: console.showSystem)
                 .background(Color.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -443,10 +443,10 @@ struct ConsoleView: View {
 /// The log as one text view. A list of SwiftUI texts cannot keep up with a busy app; a text view takes
 /// thousands of lines, and only the new ones are added each time.
 struct LogText: NSViewRepresentable {
-    let console: ConsoleModel
+    let lines: [LogLine]
     let revision: Int
     let filter: String
-    let system: Bool
+    var system: Bool = true
 
     final class Coordinator {
         var last = 0            // id of the last line drawn
@@ -486,7 +486,7 @@ struct LogText: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let view = scroll.documentView as? NSTextView, let storage = view.textStorage else { return }
         let state = context.coordinator
-        let lines = console.lines
+        let lines = self.lines
         // Start over when what is shown changes shape: another filter, the log cleared or trimmed, a new launch.
         let restart = state.filter != filter || state.system != system || (lines.first?.id ?? 0) > state.last + 1 || lines.isEmpty || state.drawn > 9000
         let last = state.last

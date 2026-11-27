@@ -155,6 +155,13 @@ De paso, Saguru hace que Vision lea códigos de barras en el simulador, donde po
   <img src="assets/datos-diseno.gif" alt="Archivos de la app, cuadrícula y paleta de colores" width="820">
 </p>
 
+### Android: el registro de un teléfono o emulador (primeros pasos)
+
+Saguru empieza a abrirse a Android. La herramienta **Android** ve, por `adb`, un teléfono conectado por USB o un
+emulador —da igual cuál—, lista sus apps, y de la que elijas muestra su versión y compilación, la lanza y sigue su
+**logcat**. Si la app se cierra, Saguru lee el motivo (excepción no atrapada, señal nativa o ANR) con la pila, como
+hace Registro en iOS. Es la primera pieza; las demás herramientas de Android irán llegando.
+
 ### Un inicio que te dice qué app tienes delante
 
 El panel se abre en el inicio: ahí eliges la app sobre la que actúa todo (con buscador, y se recuerda por simulador)
@@ -288,6 +295,9 @@ Saguru prefiere decir lo que no hace. Lo mismo aparece dentro de cada herramient
 - Idiomas: la interfaz está escrita en español y traducida a inglés, chino simplificado y japonés (menú `…` ›
   Idioma). Las traducciones no las ha revisado un hablante nativo. Los mensajes del CLI y lo que escribe el agente
   en el registro de la app siguen en español o inglés. Un texto sin traducción se muestra en español.
+- Android es una primera pieza: por ahora solo el registro (logcat) y el motivo de los cierres, sobre un teléfono o
+  emulador que `adb` vea. Sus textos están solo en español. Las herramientas de diseño (cuadrícula, reglas, colores,
+  accesibilidad) son de iOS: necesitan la ventana del Simulador, que un Android físico no tiene.
 - Fuera de alcance por ahora: captura de pantalla o video (ya lo hace el Simulador).
 
 

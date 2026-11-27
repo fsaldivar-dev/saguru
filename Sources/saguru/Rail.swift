@@ -170,6 +170,7 @@ struct ToolBar: View {
             RailPopover(model: model, tool: .data, symbol: "externaldrive", name: tr("Datos de la app")) { EmptyView() }
             RailPopover(model: model, tool: .network, symbol: "network", name: tr("Red"), active: model.networkOpen) { EmptyView() }
             RailPopover(model: model, tool: .console, symbol: "terminal", name: tr("Registro"), active: model.console.unseen) { EmptyView() }
+            RailPopover(model: model, tool: .android, symbol: "candybarphone", name: "Android") { EmptyView() }
             separator
             RailPopover(model: model, tool: .grid, symbol: "grid", name: tr("Cuadrícula"), active: model.gridOn) { EmptyView() }
             RailButton(model: model, symbol: "ruler", name: tr("Reglas"), active: model.measuring) { model.toggleMeasuring() }

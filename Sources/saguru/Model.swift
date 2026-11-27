@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Tool: String {
-    case context, push, gallery, camera, url, location, privacy, appearance, statusBar, accessibility, data, network, console, grid, colors
+    case context, push, gallery, camera, url, location, privacy, appearance, statusBar, accessibility, data, network, console, android, grid, colors
 }
 
 struct DefaultsEntry: Identifiable, Hashable {
@@ -114,6 +114,7 @@ final class PanelModel: ObservableObject {
     private(set) lazy var network = NetworkModel(panel: self)
     private(set) lazy var camera = CameraModel(panel: self)
     private(set) lazy var console = ConsoleModel(panel: self)
+    private(set) lazy var android = AndroidModel(panel: self)
 
     /// The app instance Saguru launched with its agent inside.
     struct AgentRun: Equatable {
