@@ -79,6 +79,9 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     @Published var yaw = 0.0 { didSet { if yaw != oldValue { renderImage() } } }
     /// Fractions of the frame, right and down.
     @Published var offset = CGSize.zero { didSet { if offset != oldValue { renderImage() } } }
+    /// Where the picture's corners fall in the frame (0…1, from the top left): top left, top right, bottom
+    /// right, bottom left. The view draws its handles there.
+    @Published private(set) var outline: [CGPoint] = []
     var isAdjusted: Bool { zoom != 1 || roll != 0 || pitch != 0 || yaw != 0 || offset != .zero }
     static let zoomRange = 0.25...4.0
 
@@ -370,8 +373,9 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
             context.render(picture, toBitmap: memory, rowBytes: row, bounds: bounds, format: .BGRA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
         }
         frames += 1
+        let corners = [warp.topLeft, warp.topRight, warp.bottomRight, warp.bottomLeft].map { CGPoint(x: $0.x / canvas.width, y: 1 - $0.y / canvas.height) }
         if frames % 3 == 1, visible, let shown = context.createCGImage(picture, from: bounds) {
-            DispatchQueue.main.async { self.preview = shown }
+            DispatchQueue.main.async { self.preview = shown; if self.outline != corners { self.outline = corners } }
         }
     }
 }
@@ -416,7 +420,7 @@ struct CameraForm: View {
     @ObservedObject var model: PanelModel
     @ObservedObject var camera: CameraModel
     @State private var dropping = false
-    @AppStorage("camera.limits") private var showLimits = true
+    @State private var showLimits = false
 
     var body: some View {
         FormBox(title: "Cámara", target: model) {
@@ -444,7 +448,6 @@ struct CameraForm: View {
                         }
                         .pickerStyle(.segmented).labelsHidden()
                     }
-                    adjustments
                     Divider()
                     if camera.isActive {
                         Label("\(model.app?.name ?? "La app") ve esta cámara", systemImage: "checkmark.circle.fill")
@@ -465,7 +468,9 @@ struct CameraForm: View {
                             .foregroundStyle(Color(nsColor: .systemOrange)).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
-                    limits
+                    Button { showLimits.toggle() } label: { Label("Alcance y límites", systemImage: "info.circle") }
+                        .buttonStyle(.borderless).controlSize(.small)
+                        .popover(isPresented: $showLimits, arrowEdge: .leading) { limits.padding(16).frame(width: 300) }
                 }
                 .frame(width: 250)
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -480,16 +485,12 @@ struct CameraForm: View {
 
     /// What the pretend camera covers and what it does not, where it is used rather than only in the README.
     private var limits: some View {
-        DisclosureGroup(isExpanded: $showLimits) {
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(Self.works, id: \.self) { line(it: $0, good: true) }
-                ForEach(Self.fails, id: \.self) { line(it: $0, good: false) }
-                Text("La app solo recibe la cámara si Saguru la lanzó; al lanzarla desde Xcode hay que volver a dársela.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 4)
-            }
-            .padding(.top, 6)
-        } label: {
-            Text("Alcance y límites").font(.callout.weight(.medium))
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Alcance y límites").font(.callout.weight(.semibold)).padding(.bottom, 3)
+            ForEach(Self.works, id: \.self) { line(it: $0, good: true) }
+            ForEach(Self.fails, id: \.self) { line(it: $0, good: false) }
+            Text("La app solo recibe la cámara si Saguru la lanzó; al lanzarla desde Xcode hay que volver a dársela.")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 4)
         }
     }
 
@@ -519,36 +520,115 @@ struct CameraForm: View {
         "Android: solo cámara trasera, Android 12 o posterior",
     ]
 
-    /// Zoom, turn, tilt and position: what moving the phone would do, without moving anything.
-    private var adjustments: some View {
-        Labeled("Ajuste") {
-            HStack(spacing: 6) {
-                Button { camera.zoom(by: 1 / 1.25) } label: { Image(systemName: "minus.magnifyingglass") }.help("Alejar").accessibilityLabel("Alejar")
-                Slider(value: Binding(get: { log2(camera.zoom) }, set: { camera.zoom = pow(2, $0) }), in: -2...2).accessibilityLabel("Zoom")
-                Button { camera.zoom(by: 1.25) } label: { Image(systemName: "plus.magnifyingglass") }.help("Acercar").accessibilityLabel("Acercar")
-                Text(String(format: "%.2f×", camera.zoom)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
-            }
-            dial("rotate.right", "Giro", $camera.roll, 180)
-            dial("rectangle.portrait.rotate", "Inclinación vertical", $camera.pitch, 60)
-            dial("rectangle.landscape.rotate", "Inclinación horizontal", $camera.yaw, 60)
-            HStack {
-                Button { camera.turns = (camera.turns + 1) % 4 } label: { Label("Girar 90°", systemImage: "rotate.right") }
-                Spacer()
-                Button("Restablecer") { camera.resetAdjustments() }.disabled(!camera.isAdjusted)
-            }
-            .controlSize(.small)
-            Text("Arrastra la vista para mover la imagen; pellizca para acercarla.")
-                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }
-        .buttonStyle(.borderless)
+    // MARK: Handles on the picture, as in a shape editor
+
+    private static let blue = Color(nsColor: .systemBlue)
+
+    /// Where the frame is drawn inside the picture view (fitted, with the view's padding).
+    private var frameRect: CGRect {
+        let room = CGSize(width: max(pictureSize.width - 12, 1), height: max(pictureSize.height - 12, 1))
+        let frame = camera.preview.map { CGSize(width: $0.width, height: $0.height) } ?? room
+        let fitted = min(room.width / frame.width, room.height / frame.height)
+        let size = CGSize(width: frame.width * fitted, height: frame.height * fitted)
+        return CGRect(x: (pictureSize.width - size.width) / 2, y: (pictureSize.height - size.height) / 2, width: size.width, height: size.height)
     }
 
-    private func dial(_ symbol: String, _ name: String, _ value: Binding<Double>, _ limit: Double) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbol).frame(width: 18).foregroundStyle(.secondary).help(name)
-            Slider(value: value, in: -limit...limit).accessibilityLabel(name)
-            Text(String(format: "%.0f°", value.wrappedValue)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
+    /// The outline of the picture with a handle on each corner (drag to resize) and one above it (drag to turn).
+    @ViewBuilder private var handles: some View {
+        let rect = frameRect
+        let points = camera.outline.map { CGPoint(x: rect.minX + $0.x * rect.width, y: rect.minY + $0.y * rect.height) }
+        if points.count == 4 {
+            let centre = CGPoint(x: (points[0].x + points[2].x + points[1].x + points[3].x) / 4, y: (points[0].y + points[1].y + points[2].y + points[3].y) / 4)
+            let top = CGPoint(x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2)
+            let away = hypot(top.x - centre.x, top.y - centre.y)
+            let knob = away > 1 ? CGPoint(x: top.x + (top.x - centre.x) / away * 26, y: top.y + (top.y - centre.y) / away * 26) : top
+            Path { path in path.addLines(points); path.closeSubpath(); path.move(to: top); path.addLine(to: knob) }
+                .stroke(Self.blue, lineWidth: 1.5).shadow(color: .black.opacity(0.5), radius: 1).allowsHitTesting(false)
+            ForEach(0..<4, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 2.5).fill(.white).frame(width: 10, height: 10)
+                    .overlay(RoundedRectangle(cornerRadius: 2.5).strokeBorder(Self.blue, lineWidth: 1.5))
+                    .shadow(color: .black.opacity(0.4), radius: 1.5).padding(8).contentShape(Rectangle())
+                    .position(points[index])
+                    .highPriorityGesture(DragGesture(minimumDistance: 1, coordinateSpace: .named("picture"))
+                        .onChanged { drag in
+                            let start = pinchStart ?? camera.zoom
+                            pinchStart = start
+                            let was = hypot(drag.startLocation.x - centre.x, drag.startLocation.y - centre.y)
+                            guard was > 4 else { return }
+                            // The centre moves little while resizing, so the distance to it gives the scale.
+                            let now = hypot(drag.location.x - centre.x, drag.location.y - centre.y)
+                            camera.zoom = min(max(camera.zoom * now / hypot(points[index].x - centre.x, points[index].y - centre.y), CameraModel.zoomRange.lowerBound), CameraModel.zoomRange.upperBound)
+                        }
+                        .onEnded { _ in pinchStart = nil })
+                    .help("Arrastra para acercar o alejar")
+            }
+            Circle().fill(.white).frame(width: 12, height: 12).overlay(Circle().strokeBorder(Self.blue, lineWidth: 1.5))
+                .shadow(color: .black.opacity(0.4), radius: 1.5).padding(8).contentShape(Rectangle())
+                .position(knob)
+                .highPriorityGesture(DragGesture(minimumDistance: 1, coordinateSpace: .named("picture"))
+                    .onChanged { drag in
+                        // Each step turns by the angle between where the knob is and where the pointer is.
+                        let from = atan2(knob.y - centre.y, knob.x - centre.x), to = atan2(drag.location.y - centre.y, drag.location.x - centre.x)
+                        var turned = camera.roll + (to - from) * 180 / .pi
+                        if turned > 180 { turned -= 360 } else if turned < -180 { turned += 360 }
+                        if abs(turned) < 2 { turned = 0 }
+                        camera.roll = turned
+                    })
+                .help("Arrastra para girar")
+                .accessibilityElement().accessibilityLabel("Giro").accessibilityValue(String(format: "%.0f grados", camera.roll))
+                .accessibilityAdjustableAction { camera.roll = max(-180, min(180, camera.roll + ($0 == .increment ? 15 : -15))) }
         }
+    }
+
+    /// A small ball that leans the picture, like the view gizmo of a 3D editor: drag across it to tilt.
+    private var orbit: some View {
+        ZStack {
+            Circle().fill(.ultraThinMaterial)
+            Circle().strokeBorder(.white.opacity(0.18))
+            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Self.blue.opacity(0.85))
+                .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(.white.opacity(0.7), lineWidth: 1))
+                .frame(width: 24, height: 32)
+                .rotation3DEffect(.degrees(camera.yaw), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
+                .rotation3DEffect(.degrees(-camera.pitch), axis: (x: 1, y: 0, z: 0), perspective: 0.7)
+        }
+        .frame(width: 58, height: 58)
+        .contentShape(Circle())
+        .highPriorityGesture(DragGesture(minimumDistance: 1)
+            .onChanged { drag in
+                let start = tiltStart ?? (camera.yaw, camera.pitch)
+                tiltStart = start
+                camera.yaw = max(-60, min(60, start.0 + drag.translation.width * 0.8))
+                camera.pitch = max(-60, min(60, start.1 + drag.translation.height * 0.8))
+            }
+            .onEnded { _ in tiltStart = nil })
+        .onTapGesture(count: 2) { camera.yaw = 0; camera.pitch = 0 }
+        .help("Arrastra para inclinar la imagen · doble clic para enderezarla")
+        .accessibilityElement().accessibilityLabel("Inclinación").accessibilityValue(String(format: "%.0f y %.0f grados", camera.yaw, camera.pitch))
+        .accessibilityAdjustableAction { camera.yaw = max(-60, min(60, camera.yaw + ($0 == .increment ? 12 : -12))) }
+    }
+
+    /// Zoom, quarter turns and reset, floating over the bottom of the picture.
+    private var controls: some View {
+        HStack(spacing: 2) {
+            pill("minus", "Alejar") { camera.zoom(by: 1 / 1.25) }
+            Button { camera.zoom = 1 } label: { Text(String(format: "%.2f×", camera.zoom)).font(.caption.monospacedDigit()).frame(width: 46) }
+                .buttonStyle(.plain).help("Volver a 1×").accessibilityLabel("Zoom")
+            pill("plus", "Acercar") { camera.zoom(by: 1.25) }
+            Divider().frame(height: 16).padding(.horizontal, 4)
+            pill("rotate.right", "Girar 90°") { camera.turns = (camera.turns + 1) % 4 }
+            Text(String(format: "%.0f°", camera.roll)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 36)
+            Divider().frame(height: 16).padding(.horizontal, 4)
+            pill("arrow.counterclockwise", "Restablecer") { camera.resetAdjustments() }.disabled(!camera.isAdjusted)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.16)))
+        .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
+    }
+
+    private func pill(_ symbol: String, _ name: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).frame(width: 26, height: 24).contentShape(Rectangle()) }
+            .buttonStyle(.plain).help(name).accessibilityLabel(name)
     }
 
     /// The pictures at hand. Clicking one sends it at once; ⌘1 to ⌘9 do the same from the keyboard.
@@ -601,6 +681,7 @@ struct CameraForm: View {
 
     @State private var dragStart: CGSize?
     @State private var pinchStart: Double?
+    @State private var tiltStart: (Double, Double)?
     @State private var pictureSize = CGSize(width: 300, height: 300)
 
     private var picture: some View {
@@ -616,10 +697,21 @@ struct CameraForm: View {
                 }
                 .foregroundStyle(.secondary)
             }
+            if camera.preview != nil {
+                handles
+                VStack {
+                    HStack { Spacer(); orbit }
+                    Spacer()
+                    controls
+                }
+                .padding(12)
+            }
         }
+        .coordinateSpace(name: "picture")
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(dropping ? Color(nsColor: .systemBlue) : Color.white.opacity(0.12), lineWidth: dropping ? 2 : 1))
-        .frame(maxWidth: .infinity, minHeight: 300, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 220, maxHeight: .infinity)
         .background(GeometryReader { box in Color.clear.onAppear { pictureSize = box.size }.onChange(of: box.size) { pictureSize = $0 } })
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 2)
@@ -627,10 +719,9 @@ struct CameraForm: View {
                 let start = dragStart ?? camera.offset
                 dragStart = start
                 // The frame is shown fitted inside this view: a drag is measured against the frame as drawn.
-                let frame = camera.preview.map { CGSize(width: $0.width, height: $0.height) } ?? pictureSize
-                let fitted = min(pictureSize.width / frame.width, pictureSize.height / frame.height)
-                camera.offset = CGSize(width: start.width + drag.translation.width / (frame.width * fitted),
-                                       height: start.height + drag.translation.height / (frame.height * fitted))
+                let rect = frameRect
+                camera.offset = CGSize(width: start.width + drag.translation.width / rect.width,
+                                       height: start.height + drag.translation.height / rect.height)
             }
             .onEnded { _ in dragStart = nil })
         .simultaneousGesture(MagnificationGesture()
