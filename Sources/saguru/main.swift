@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-let version = "0.3.2"
+let version = "0.4.0"
 let bundleIdentifier = "dev.saguru.app"
 
 let usage = """
