@@ -58,6 +58,7 @@ struct DrawerView: View {
         case .statusBar: StatusBarForm(model: model)
         case .accessibility: AccessibilityForm(model: model)
         case .data: DataForm(model: model)
+        case .console: ConsoleView(console: model.console, panel: model)
         case .grid: GridForm(model: model)
         case .colors: ColorsForm(model: model)
         default: EmptyView()

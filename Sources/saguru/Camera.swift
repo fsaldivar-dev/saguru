@@ -446,12 +446,12 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
 /// Launches an app with Saguru's agent inside. Returns what went wrong, if anything.
 enum AgentLauncher {
     /// Returns the launched app's process, or what went wrong.
-    static func launch(udid: String, bundleID: String, environment extra: [String: String], arguments: [String] = []) -> (pid: Int32?, failure: String?) {
+    static func launch(udid: String, bundleID: String, environment extra: [String: String], arguments: [String] = [], options: [String] = []) -> (pid: Int32?, failure: String?) {
         guard let agent = Bundle.main.resourceURL?.appendingPathComponent("SaguruAgent.dylib"),
               FileManager.default.fileExists(atPath: agent.path) else {
             return (nil, "Falta SaguruAgent.dylib en Saguru.app. Vuelve a construir con scripts/build.sh.")
         }
-        let process = Simctl.process(["launch", "--terminate-running-process", udid, bundleID] + arguments)
+        let process = Simctl.process(["launch", "--terminate-running-process"] + options + [udid, bundleID] + arguments)
         var environment = ProcessInfo.processInfo.environment
         environment["SIMCTL_CHILD_DYLD_INSERT_LIBRARIES"] = agent.path
         for (name, value) in extra { environment["SIMCTL_CHILD_\(name)"] = value }

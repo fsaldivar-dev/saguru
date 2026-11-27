@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Tool: String {
-    case context, push, gallery, camera, url, location, privacy, appearance, statusBar, accessibility, data, network, grid, colors
+    case context, push, gallery, camera, url, location, privacy, appearance, statusBar, accessibility, data, network, console, grid, colors
 }
 
 struct DefaultsEntry: Identifiable, Hashable {
@@ -109,6 +109,7 @@ final class PanelModel: ObservableObject {
     @Published var networkOpen = false
     private(set) lazy var network = NetworkModel(panel: self)
     private(set) lazy var camera = CameraModel(panel: self)
+    private(set) lazy var console = ConsoleModel(panel: self)
 
     /// The app instance Saguru launched with its agent inside.
     struct AgentRun: Equatable {
@@ -134,12 +135,17 @@ final class PanelModel: ObservableObject {
         var environment = ["SAGURU_NET_FOLDER": network.beginSession(for: key).path]
         let cameraFolder = camera.folderForLaunch(of: key)
         if let cameraFolder { environment["SAGURU_CAM_FOLDER"] = cameraFolder.path }
+        // What the app prints goes to two files, so it is not lost for want of Xcode's console.
+        let files = console.beginSession()
+        let name = app?.name ?? bundleID
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = AgentLauncher.launch(udid: udid, bundleID: bundleID, environment: environment, arguments: arguments)
+            let result = AgentLauncher.launch(udid: udid, bundleID: bundleID, environment: environment, arguments: arguments,
+                                              options: ["--stdout=\(files.output)", "--stderr=\(files.error)"])
             DispatchQueue.main.async {
                 if let pid = result.pid, result.failure == nil {
                     self.agentRun = AgentRun(key: key, pid: pid, camera: cameraFolder != nil)
                     self.camera.launched(key, camera: cameraFolder != nil)
+                    self.console.launched(pid: pid, udid: udid, name: name)
                 } else {
                     self.agentRun = nil
                 }
@@ -154,6 +160,7 @@ final class PanelModel: ObservableObject {
         agentRun = nil
         network.agentWentAway()
         camera.agentWentAway()
+        console.appEnded()
     }
 
     @Published var axMarks: [AXMark] = []

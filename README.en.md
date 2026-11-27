@@ -73,6 +73,10 @@ Every request with its method, status, time and size. Request and response side 
   <img src="assets/mock.gif" alt="A mock is created from a request, its status is changed to 503 and the app receives it" width="900">
 </p>
 
+### Log: the console you lose outside Xcode
+
+Launch the app from Saguru and you see what it prints (`print`, `NSLog`) and the errors the system logs for it, with a filter and copy. If the app closes, Saguru finds the report macOS writes and shows the kind of failure, the message (`Fatal error: …`, the uncaught exception) and the stack, with your own code highlighted. No Xcode and no Console app needed.
+
 ### Camera: what the simulator lacks
 
 Pick an image, your Mac's camera, an iPhone, or an Android phone over USB, and your app sees it as its own camera: live preview, frames for Vision and OCR, QR reading, photo capture, front and back cameras, and the system camera screen. Changing the source does not require relaunching the app.

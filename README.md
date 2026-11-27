@@ -85,6 +85,13 @@ HTTP, con autocompletado de códigos de estado y cabeceras, y se aplica en la si
   <img src="assets/mock.gif" alt="Se crea un mock desde una petición, se cambia el estado a 503 y la app lo recibe" width="900">
 </p>
 
+### Registro: la consola que pierdes fuera de Xcode
+
+Lanza la app desde Saguru y verás lo que imprime (`print`, `NSLog`) y los errores que el sistema registra para
+ella, con filtro y copia. Si la app se cierra, Saguru busca el informe que macOS escribe, y te enseña el tipo de
+fallo, el mensaje (`Fatal error: …`, la excepción sin atrapar) y la pila, con tu código destacado. Sin abrir Xcode
+ni la app Consola.
+
 ### Cámara: lo que el simulador no tiene
 
 Elige una imagen, la cámara de tu Mac, un iPhone o un Android por USB, y tu app la ve como si fuera su cámara: visor
