@@ -153,28 +153,13 @@ struct ToolBar: View {
     var body: some View {
         HStack(spacing: 2) {
             RailButton(model: model, symbol: "chevron.left.2", name: tr("Plegar")) { model.openTool = nil }
-            ContextButton(model: model)
-            separator
-            RailPopover(model: model, tool: .push, symbol: "bell.badge", name: tr("Notificación push")) { EmptyView() }
-            RailPopover(model: model, tool: .gallery, symbol: "photo.on.rectangle.angled", name: tr("Galería")) { EmptyView() }
-            RailPopover(model: model, tool: .camera, symbol: "camera", name: tr("Cámara"), active: model.camera.isActive) { EmptyView() }
-            RailPopover(model: model, tool: .url, symbol: "link", name: tr("Deep links")) { EmptyView() }
-            RailPopover(model: model, tool: .location, symbol: "location", name: tr("Ubicación")) { EmptyView() }
-            RailPopover(model: model, tool: .privacy, symbol: "hand.raised", name: tr("Permisos")) { EmptyView() }
-            separator
-            RailPopover(model: model, tool: .appearance, symbol: "circle.lefthalf.filled", name: tr("Apariencia"),
-                        active: model.split == .appearance) { EmptyView() }
-            RailPopover(model: model, tool: .statusBar, symbol: "antenna.radiowaves.left.and.right", name: tr("Barra de estado"),
-                        active: model.cleanBar) { EmptyView() }
-            RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: tr("Accesibilidad")) { EmptyView() }
-            RailPopover(model: model, tool: .data, symbol: "externaldrive", name: tr("Datos de la app")) { EmptyView() }
-            RailPopover(model: model, tool: .network, symbol: "network", name: tr("Red"), active: model.networkOpen) { EmptyView() }
-            RailPopover(model: model, tool: .console, symbol: "terminal", name: tr("Registro"), active: model.console.unseen) { EmptyView() }
-            RailPopover(model: model, tool: .android, symbol: "candybarphone", name: "Android") { EmptyView() }
-            separator
-            RailPopover(model: model, tool: .grid, symbol: "grid", name: tr("Cuadrícula"), active: model.gridOn) { EmptyView() }
-            RailButton(model: model, symbol: "ruler", name: tr("Reglas"), active: model.measuring) { model.toggleMeasuring() }
-            RailPopover(model: model, tool: .colors, symbol: "eyedropper", name: tr("Colores")) { EmptyView() }
+            if model.platform == .android {
+                // Hanging off an Android emulator or a phone's mirror: only the tools that work there.
+                separator
+                RailPopover(model: model, tool: .android, symbol: "candybarphone", name: "Android") { EmptyView() }
+            } else {
+                 contextTools
+            }
             Spacer(minLength: 8)
             RailButton(model: model, symbol: model.expanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
                        name: model.expanded ? "Reducir el panel" : tr("Ampliar a pantalla completa"), active: model.expanded) { model.expanded.toggle() }
@@ -182,6 +167,33 @@ struct ToolBar: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+    }
+
+    /// The tools for the iOS Simulator. The Android tool rides along, so its log is one click away even
+    /// while the panel hangs off the Simulator.
+    @ViewBuilder private var contextTools: some View {
+        ContextButton(model: model)
+        separator
+        RailPopover(model: model, tool: .push, symbol: "bell.badge", name: tr("Notificación push")) { EmptyView() }
+        RailPopover(model: model, tool: .gallery, symbol: "photo.on.rectangle.angled", name: tr("Galería")) { EmptyView() }
+        RailPopover(model: model, tool: .camera, symbol: "camera", name: tr("Cámara"), active: model.camera.isActive) { EmptyView() }
+        RailPopover(model: model, tool: .url, symbol: "link", name: tr("Deep links")) { EmptyView() }
+        RailPopover(model: model, tool: .location, symbol: "location", name: tr("Ubicación")) { EmptyView() }
+        RailPopover(model: model, tool: .privacy, symbol: "hand.raised", name: tr("Permisos")) { EmptyView() }
+        separator
+        RailPopover(model: model, tool: .appearance, symbol: "circle.lefthalf.filled", name: tr("Apariencia"),
+                    active: model.split == .appearance) { EmptyView() }
+        RailPopover(model: model, tool: .statusBar, symbol: "antenna.radiowaves.left.and.right", name: tr("Barra de estado"),
+                    active: model.cleanBar) { EmptyView() }
+        RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: tr("Accesibilidad")) { EmptyView() }
+        RailPopover(model: model, tool: .data, symbol: "externaldrive", name: tr("Datos de la app")) { EmptyView() }
+        RailPopover(model: model, tool: .network, symbol: "network", name: tr("Red"), active: model.networkOpen) { EmptyView() }
+        RailPopover(model: model, tool: .console, symbol: "terminal", name: tr("Registro"), active: model.console.unseen) { EmptyView() }
+        RailPopover(model: model, tool: .android, symbol: "candybarphone", name: "Android") { EmptyView() }
+        separator
+        RailPopover(model: model, tool: .grid, symbol: "grid", name: tr("Cuadrícula"), active: model.gridOn) { EmptyView() }
+        RailButton(model: model, symbol: "ruler", name: tr("Reglas"), active: model.measuring) { model.toggleMeasuring() }
+        RailPopover(model: model, tool: .colors, symbol: "eyedropper", name: tr("Colores")) { EmptyView() }
     }
 
     private var separator: some View {

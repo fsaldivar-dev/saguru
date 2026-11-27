@@ -48,6 +48,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
         let topLeft: CGRect
         /// Bottom-left origin (what AppKit uses).
         let frame: CGRect
+        var platform: Platform = .ios
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -108,11 +109,16 @@ final class PanelController: NSObject, NSApplicationDelegate {
         }
         let (window, above) = found
         model.simulatorWindow = window.topLeft
-        if sim == nil { model.refreshDevices() }
-        if window != sim {
-            // With several simulators open, the panel acts on the one it is attached to. macOS only tells
-            // which simulator a window shows to apps with Accessibility (or Screen Recording) permission.
-            if window.number != sim?.number {
+        if model.platform != window.platform {
+            model.platform = window.platform
+            // A tool from the other platform makes no sense here: fall back to the one that always fits.
+            if model.openTool != nil { model.openTool = window.platform == .android ? .android : .context }
+        }
+        if window.platform == .ios {
+            if sim == nil { model.refreshDevices() }
+            if window != sim, window.number != sim?.number {
+                // With several simulators open, the panel acts on the one it is attached to. macOS only tells
+                // which simulator a window shows to apps with Accessibility (or Screen Recording) permission.
                 if !window.title.isEmpty {
                     model.select(windowTitle: window.title)
                 } else if let title = SimulatorAX.window(at: window.topLeft)?.title {
@@ -120,6 +126,11 @@ final class PanelController: NSObject, NSApplicationDelegate {
                 }
                 model.knowsWindowDevice = !window.title.isEmpty || SimulatorAX.trusted
             }
+        } else if window != sim, window.number != sim?.number {
+            // A new Android window: look again for the phone or emulator behind it.
+            model.android.reload()
+        }
+        if window != sim {
             if window.topLeft.size != sim?.topLeft.size { screenOffset = nil }
             sim = window
             lastChange = Date()
@@ -297,7 +308,16 @@ final class PanelController: NSObject, NSApplicationDelegate {
         if !toast.isVisible { toast.orderFrontRegardless() }
     }
 
-    /// Frontmost on-screen Simulator device window. Needs no special permission.
+    /// The window a given app's owner name belongs to, if Saguru can hang off it: the iOS Simulator, an
+    /// Android emulator, or a mirror of an Android phone.
+    private static func platform(forOwner owner: String) -> Platform? {
+        if owner == "Simulator" { return .ios }
+        // Android Studio's emulator (qemu-backed), and the mirrors we know: Mirroru and scrcpy.
+        if owner.contains("qemu") || owner == "Emulator" || owner == "Mirroru" || owner == "scrcpy" { return .android }
+        return nil
+    }
+
+    /// Frontmost on-screen device window the panel can hang off. Needs no special permission.
     /// `above` lists which of our own windows are stacked in front of it.
     private static func simulatorWindow(ignoring own: [Int]) -> (SimWindow, above: Set<Int>)? {
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
@@ -306,12 +326,16 @@ final class PanelController: NSObject, NSApplicationDelegate {
         var above = Set<Int>()
         for window in list where (window[kCGWindowLayer as String] as? Int) == 0 {
             let number = window[kCGWindowNumber as String] as? Int ?? 0
-            if (window[kCGWindowOwnerName as String] as? String) == "Simulator",
+            let owner = window[kCGWindowOwnerName as String] as? String ?? ""
+            let title = window[kCGWindowName as String] as? String ?? ""
+            // An Android emulator's title says "Android Emulator"; a plain window of the same process is not it.
+            let emulatorTitle = owner == "Emulator" || owner.contains("qemu")
+            if let found = platform(forOwner: owner), !(emulatorTitle && !title.isEmpty && !title.contains("Emulator")),
                let bounds = window[kCGWindowBounds as String] as? [String: CGFloat],
                let w = bounds["Width"], let h = bounds["Height"], let x = bounds["X"], let y = bounds["Y"], h > 200,
                NSScreen.screens.contains(where: { $0.frame.intersects(CGRect(x: x, y: primaryHeight - y - h, width: w, height: h)) }) {
-                let sim = SimWindow(number: number, title: window[kCGWindowName as String] as? String ?? "", topLeft: CGRect(x: x, y: y, width: w, height: h),
-                                    frame: CGRect(x: x, y: primaryHeight - y - h, width: w, height: h))
+                let sim = SimWindow(number: number, title: title, topLeft: CGRect(x: x, y: y, width: w, height: h),
+                                    frame: CGRect(x: x, y: primaryHeight - y - h, width: w, height: h), platform: found)
                 return (sim, above)
             }
             if own.contains(number) { above.insert(number) }

@@ -157,8 +157,9 @@ De paso, Saguru hace que Vision lea códigos de barras en el simulador, donde po
 
 ### Android: el registro de un teléfono o emulador (primeros pasos)
 
-Saguru empieza a abrirse a Android. La herramienta **Android** ve, por `adb`, un teléfono conectado por USB o un
-emulador —da igual cuál—, lista sus apps, y de la que elijas muestra su versión y compilación, la lanza y sigue su
+Saguru empieza a abrirse a Android. Saguru ya no cuelga solo del Simulador de iOS: también se acopla a la ventana de un **emulador de Android** o
+al **mirror** de un teléfono (Mirroru o scrcpy), como si fuera otro simulador, y ahí muestra solo las herramientas
+de Android. La herramienta **Android** ve, por `adb`, un teléfono conectado por USB o un emulador —da igual cuál—, lista sus apps, y de la que elijas muestra su versión y compilación, la lanza y sigue su
 **logcat**. Si la app se cierra, Saguru lee el motivo (excepción no atrapada, señal nativa o ANR) con la pila, como
 hace Registro en iOS. Es la primera pieza; las demás herramientas de Android irán llegando.
 

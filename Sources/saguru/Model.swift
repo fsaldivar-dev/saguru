@@ -6,6 +6,10 @@ enum Tool: String {
     case context, push, gallery, camera, url, location, privacy, appearance, statusBar, accessibility, data, network, console, android, grid, colors
 }
 
+/// Which kind of device the panel is hanging off right now: the iOS Simulator, or an Android device in a
+/// window (an emulator, or a mirror of a phone). It decides which tools the panel offers.
+enum Platform: Equatable { case ios, android }
+
 struct DefaultsEntry: Identifiable, Hashable {
     enum Kind: String { case string, bool, int, float, other }
     let key: String
@@ -16,6 +20,8 @@ struct DefaultsEntry: Identifiable, Hashable {
 
 /// State shared by the rail, its popovers and the design overlay.
 final class PanelModel: ObservableObject {
+    /// The kind of device the panel is attached to, set by the window it hangs off.
+    @Published var platform: Platform = .ios
     @Published var devices: [SimDevice] = []
     @Published var selected: String?
     @Published var apps: [SimApp] = []
@@ -37,6 +43,7 @@ final class PanelModel: ObservableObject {
 
     /// Opens the panel: on the app chooser until there is an app (and the permission it needs), then where it was left.
     func unfold() {
+        if platform == .android { openTool = .android; return }
         openTool = app == nil || !SimulatorAX.trusted ? .context : lastTool
     }
     /// Name of the button under the cursor (shown as a tooltip) and the last action's outcome.
