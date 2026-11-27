@@ -443,37 +443,87 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     }
 }
 
-/// Launches an app with Saguru's agent inside. Returns what went wrong, if anything.
+/// Launches an app with Saguru's agent inside and stays connected to what it prints.
 enum AgentLauncher {
-    /// Returns the launched app's process, or what went wrong.
-    static func launch(udid: String, bundleID: String, environment extra: [String: String], arguments: [String] = [], options: [String] = []) -> (pid: Int32?, failure: String?) {
+    /// The ends of the terminals lent to running apps. Each must outlive the call that opened it: letting
+    /// go of one closes it, and the app's lines would have nowhere to arrive.
+    private static var open: [ObjectIdentifier: FileHandle] = [:]
+    private static let openLock = NSLock()
+
+    /// Launches the app and returns its process, or what went wrong. simctl stays running for as long as the
+    /// app does, passing on what the app writes to standard output and error; `output` gets that text as it
+    /// comes, and `ended` is called when the app is gone. A terminal is lent to simctl because an app writing
+    /// to a pipe keeps its lines to itself until its buffer fills, and writing to a terminal sends each at once.
+    static func launch(udid: String, bundleID: String, environment extra: [String: String], arguments: [String] = [],
+                       output: @escaping (Data) -> Void = { _ in }, ended: @escaping () -> Void = {}) -> (pid: Int32?, failure: String?) {
         guard let agent = Bundle.main.resourceURL?.appendingPathComponent("SaguruAgent.dylib"),
               FileManager.default.fileExists(atPath: agent.path) else {
             return (nil, "Falta SaguruAgent.dylib en Saguru.app. Vuelve a construir con scripts/build.sh.")
         }
-        let process = Simctl.process(["launch", "--terminate-running-process"] + options + [udid, bundleID] + arguments)
+        var near: Int32 = 0, far: Int32 = 0
+        guard openpty(&near, &far, nil, nil, nil) == 0 else { return (nil, "No se pudo abrir un terminal para la app.") }
+        let process = Simctl.process(["launch", "--console-pty", "--terminate-running-process", udid, bundleID] + arguments)
         var environment = ProcessInfo.processInfo.environment
         environment["SIMCTL_CHILD_DYLD_INSERT_LIBRARIES"] = agent.path
         for (name, value) in extra { environment["SIMCTL_CHILD_\(name)"] = value }
         process.environment = environment
-        let output = Pipe(), errors = Pipe()
-        process.standardOutput = output
+        let errors = Pipe()
+        process.standardOutput = FileHandle(fileDescriptor: far, closeOnDealloc: false)
         process.standardError = errors
-        do {
-            try process.run()
-            // "dev.example.app: 12345"
-            let printed = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            let text = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            process.waitUntilExit()
-            if process.terminationStatus != 0 {
-                let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                return (nil, message.isEmpty ? "No se pudo lanzar la app." : message)
+        process.standardInput = FileHandle.nullDevice
+
+        // simctl announces the app as "dev.example.app: 12345" among the app's own lines.
+        let found = DispatchSemaphore(value: 0)
+        let lock = NSLock()
+        var pid: Int32?
+        var pending = Data()
+        let reader = FileHandle(fileDescriptor: near, closeOnDealloc: true)
+        let tag = Data("\(bundleID): ".utf8)
+        openLock.lock(); open[ObjectIdentifier(reader)] = reader; openLock.unlock()
+        reader.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                openLock.lock(); open[ObjectIdentifier(handle)] = nil; openLock.unlock()
+                found.signal()
+                ended()
+                return
             }
-            let pid = printed.split(separator: ":").last.flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-            return (pid, nil)
-        } catch {
+            lock.lock()
+            let known = pid != nil
+            lock.unlock()
+            if known { output(data); return }
+            pending.append(data)
+            guard let range = pending.range(of: tag), let end = pending[range.upperBound...].firstIndex(of: 0x0A) else {
+                // Not announced yet; never hold on to more than a little.
+                if pending.count > 65536 { output(pending); pending = Data() }
+                return
+            }
+            let number = String(decoding: pending[range.upperBound..<end], as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            lock.lock()
+            pid = Int32(number) ?? -1
+            lock.unlock()
+            var rest = pending
+            rest.removeSubrange(range.lowerBound...end)
+            pending = Data()
+            if !rest.isEmpty { output(rest) }
+            found.signal()
+        }
+        do { try process.run() } catch {
+            reader.readabilityHandler = nil
+            close(far)
             return (nil, "No se pudo ejecutar xcrun simctl.")
         }
+        close(far)
+        _ = found.wait(timeout: .now() + 20)
+        lock.lock()
+        let result = pid
+        lock.unlock()
+        if let result, result > 0 { return (result, nil) }
+        // No process: simctl said why on its own error stream and has finished.
+        if process.isRunning { process.terminate() }
+        let said = String(data: errors.fileHandleForReading.availableData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (nil, said.isEmpty ? "No se pudo lanzar la app." : said)
     }
 }
 

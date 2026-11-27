@@ -135,12 +135,14 @@ final class PanelModel: ObservableObject {
         var environment = ["SAGURU_NET_FOLDER": network.beginSession(for: key).path]
         let cameraFolder = camera.folderForLaunch(of: key)
         if let cameraFolder { environment["SAGURU_CAM_FOLDER"] = cameraFolder.path }
-        // What the app prints goes to two files, so it is not lost for want of Xcode's console.
-        let files = console.beginSession()
+        // What the app prints is kept, so it is not lost for want of Xcode's console.
+        let console = self.console
+        let session = console.beginSession()
         let name = app?.name ?? bundleID
         DispatchQueue.global(qos: .userInitiated).async {
             let result = AgentLauncher.launch(udid: udid, bundleID: bundleID, environment: environment, arguments: arguments,
-                                              options: ["--stdout=\(files.output)", "--stderr=\(files.error)"])
+                                              output: { data in DispatchQueue.main.async { console.receive(data, session: session) } },
+                                              ended: { DispatchQueue.main.async { self.checkAgent() } })
             DispatchQueue.main.async {
                 if let pid = result.pid, result.failure == nil {
                     self.agentRun = AgentRun(key: key, pid: pid, camera: cameraFolder != nil)

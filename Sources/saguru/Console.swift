@@ -2,9 +2,10 @@ import AppKit
 import SwiftUI
 
 // The app's console. An app launched from Xcode prints there; launched any other way, what it prints is
-// lost, and when it closes nobody says why. Saguru keeps both: it launches the app with its output sent to
-// two files, follows the system log for that process, and when the process ends it looks for the crash
-// report macOS writes and reads the reason and the stack out of it.
+// lost, and when it closes nobody says why. Saguru keeps both: it stays connected to what the app writes
+// (see AgentLauncher), follows the system log for that process, and when the process ends it says why:
+// what the app wrote last, how the system says it ended, and the crash report macOS writes, whose stack
+// and reason it reads. The report can take a while, so the first two are shown at once.
 
 struct LogLine: Identifiable {
     enum Kind { case output, error, system, fault, note }
@@ -44,100 +45,157 @@ final class ConsoleModel: ObservableObject {
     @Published private(set) var appName = ""
 
     unowned let panel: PanelModel
-    private var folder: URL?
-    private var readers: [(handle: FileHandle, kind: LogLine.Kind, rest: Data)] = []
-    private var timer: Timer?
+    private var rest = Data()
     private var stream: Process?
     private var streamRest = Data()
     private var count = 0
+    private var session = 0
     private var launchedAt = Date()
     private var pid: Int32 = 0
+    private var udid = ""
     private static let limit = 6000
 
     init(panel: PanelModel) { self.panel = panel }
 
     var shown: [LogLine] { showSystem ? lines : lines.filter { $0.kind != .system } }
 
-    /// Before a launch: the two files the app's output will go to.
-    func beginSession() -> (output: String, error: String) {
-        stop()
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("saguru-log/\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let output = folder.appendingPathComponent("stdout.log"), error = folder.appendingPathComponent("stderr.log")
-        FileManager.default.createFile(atPath: output.path, contents: nil)
-        FileManager.default.createFile(atPath: error.path, contents: nil)
-        self.folder = folder
+    /// Before a launch. What arrives later from an earlier launch is told apart by the number returned.
+    func beginSession() -> Int {
+        stopStream()
+        session += 1
+        pid = 0
+        rest = Data()
         lines = []
         crash = nil
         unseen = false
         count = 0
-        return (output.path, error.path)
+        return session
     }
 
-    /// The app is running: follow its two files and the system log for its process.
+    /// What the app wrote to standard output or error, as it comes.
+    func receive(_ data: Data, session: Int) {
+        guard session == self.session else { return }
+        var all = rest + data
+        while let newline = all.firstIndex(of: 0x0A) {
+            var text = String(decoding: all[all.startIndex..<newline], as: UTF8.self)
+            while text.hasSuffix("\r") { text.removeLast() }
+            if !text.trimmingCharacters(in: .whitespaces).isEmpty { add(text, Self.isFailure(text) ? .error : .output) }
+            all = all[all.index(after: newline)...]
+        }
+        rest = Data(all)
+    }
+
+    /// Lines the runtime writes when it gives up: Swift's failures and an uncaught exception.
+    private static func isFailure(_ text: String) -> Bool {
+        text.contains("Fatal error") || text.contains("Terminating app due to") || text.contains("*** First throw call stack")
+            || text.contains("Precondition failed") || text.contains("Assertion failed") || text.contains("libc++abi: terminating")
+    }
+
+    /// The app is running: follow the system log for its process.
     func launched(pid: Int32, udid: String, name: String) {
-        guard let folder else { return }
         self.pid = pid
+        self.udid = udid
         appName = name
         launchedAt = Date()
-        readers = [("stdout.log", LogLine.Kind.output), ("stderr.log", .error)].compactMap { file, kind in
-            (try? FileHandle(forReadingFrom: folder.appendingPathComponent(file))).map { ($0, kind, Data()) }
-        }
         add("\(name) lanzada por Saguru · proceso \(pid)", .note)
-        timer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: true) { [weak self] _ in self?.readFiles() }
-
         let process = Simctl.process(["spawn", udid, "log", "stream", "--style", "compact", "--level", "debug", "--predicate", "processIdentifier == \(pid)"])
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty else { return }
+            guard !data.isEmpty else { handle.readabilityHandler = nil; return }
             DispatchQueue.main.async { self?.readSystem(data) }
         }
         try? process.run()
         stream = process
     }
 
-    /// The process is gone. A crash report takes a moment to be written, so it is looked for a few times.
+    /// The process is gone. What the app wrote last is known at once; how the system says it ended takes a
+    /// moment; the crash report, with the stack, can take many seconds for a large app. Each is shown as it comes.
     func appEnded() {
         guard pid != 0 else { return }
-        readFiles()
-        let ended = pid, name = appName
+        let ended = pid, name = appName, mine = session, since = launchedAt, device = udid
         pid = 0
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.stopStream() }
-        var tries = 0
-        func look() {
-            tries += 1
-            if let report = Self.report(for: ended, since: launchedAt) ?? (tries >= 6 ? fallback() : nil) {
-                crash = report
-                unseen = panel.openTool != .console
-                add("\(name) se cerró: \(report.title)", .fault)
-                panel.say("\(name) se cerró: \(report.reason.isEmpty ? report.title : String(report.reason.prefix(90))). Míralo en Registro")
-            } else if tries < 6 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { look() }
-            } else {
-                add("\(name) terminó sin informe de error (la cerraste tú, el sistema u otra herramienta)", .note)
+        if !rest.isEmpty { receive(Data([0x0A]), session: mine) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in if self?.session == mine { self?.stopStream() } }
+
+        let said = lastWords()
+        var announced = false
+        func show(_ report: CrashReport) {
+            guard session == mine else { return }
+            crash = report
+            unseen = panel.openTool != .console
+            guard !announced else { return }
+            announced = true
+            let why = report.reason.split(separator: "\n").first.map(String.init) ?? report.title
+            add("\(name) se cerró: \(report.title)", .fault)
+            panel.say("\(name) se cerró: \(why.prefix(110)). Míralo en Registro")
+        }
+        if !said.isEmpty { show(CrashReport(title: "Error fatal", reason: said, frames: [], file: nil)) }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            // The report macOS writes: up to about a minute for it to appear.
+            var report: CrashReport?
+            for attempt in 0..<45 {
+                if let found = Self.report(for: ended, since: since) { report = found; break }
+                if attempt == 2 {
+                    // Meanwhile, how the simulator itself says the process ended.
+                    let status = Self.exitStatus(pid: ended, udid: device)
+                    DispatchQueue.main.async {
+                        guard self.session == mine, self.crash == nil, let status else { return }
+                        if status.failure { show(CrashReport(title: status.title, reason: status.reason, frames: [], file: nil)) }
+                        else { self.add("\(name) terminó: \(status.reason)", .note) ; announced = true }
+                    }
+                }
+                Thread.sleep(forTimeInterval: 1.3)
+                if attempt == 8 {
+                    var quiet = false
+                    DispatchQueue.main.sync { quiet = self.crash == nil && announced }
+                    if quiet { return }   // it ended on purpose: no report is coming
+                }
+            }
+            DispatchQueue.main.async {
+                guard self.session == mine else { return }
+                if var report {
+                    // The report knows the stack; the app's own last words say it best.
+                    if !said.isEmpty { report.reason = said + (report.reason.isEmpty ? "" : "\n" + report.reason) }
+                    show(report)
+                } else if self.crash == nil, !announced {
+                    self.add("\(name) terminó sin que el sistema dejara un motivo", .note)
+                }
             }
         }
-        look()
     }
 
-    /// With no report, a Swift runtime failure still leaves its own line in what the app printed.
-    private func fallback() -> CrashReport? {
-        guard let fatal = lines.last(where: { $0.kind == .error && ($0.text.contains("Fatal error") || $0.text.contains("Terminating app") || $0.text.contains("Thread 1: ")) }) else { return nil }
-        return CrashReport(title: "Error fatal", reason: fatal.text, frames: [], file: nil)
+    /// The failure lines at the end of what the app wrote, if it said anything on its way out.
+    private func lastWords() -> String {
+        let tail = lines.suffix(60).filter { $0.kind == .error }.map(\.text).filter { !$0.contains("First throw call stack") }
+        return tail.suffix(3).joined(separator: "\n")
+    }
+
+    /// How SpringBoard recorded the end of the process: "domain:signal(2) code:SIGABRT(6)", "domain:tcc(11) code:0"…
+    static func exitStatus(pid: Int32, udid: String) -> (title: String, reason: String, failure: Bool)? {
+        let predicate = "process == \"SpringBoard\" AND subsystem == \"com.apple.FrontBoard\" AND eventMessage CONTAINS \"Process exited\" AND eventMessage CONTAINS \":\(pid)]\""
+        guard let data = try? Simctl.run(["spawn", udid, "log", "show", "--last", "40s", "--style", "compact", "--predicate", predicate]),
+              let line = String(data: data, encoding: .utf8)?.split(separator: "\n").last(where: { $0.contains("domain:") }) else { return nil }
+        func field(_ name: String) -> String {
+            guard let start = line.range(of: name + ":") else { return "" }
+            return String(line[start.upperBound...].prefix { $0 != " " && $0 != ">" })
+        }
+        let domain = field("domain"), code = field("code")
+        let kind = String(domain.prefix { $0 != "(" }), what = String(code.prefix { $0 != "(" })
+        switch kind {
+        case "tcc": return ("Permiso cambiado", "el sistema la cerró porque cambió un permiso de privacidad (es lo normal al conceder o quitar uno)", false)
+        case "frontboard", "springboard": return ("Cierre pedido", "la cerró el usuario, Saguru u otra herramienta", false)
+        case "jetsam": return ("Sin memoria", "El sistema la cerró por usar demasiada memoria (\(what)).", true)
+        case "watchdog", "runningboard": return ("Cerrada por el sistema", "El sistema la cerró: tardó demasiado en responder o incumplió una regla (\(domain) \(code)).", true)
+        case "signal": return ("Señal \(what)", "El proceso recibió la señal \(what).", !["SIGKILL", "SIGTERM"].contains(what))
+        default: return ("Terminó", "salió con \(domain) \(code)", false)
+        }
     }
 
     func clear() { lines = []; count = 0 }
-
-    private func stop() {
-        timer?.invalidate(); timer = nil
-        readers.forEach { try? $0.handle.close() }
-        readers = []
-        stopStream()
-        pid = 0
-    }
 
     private func stopStream() {
         stream?.terminate()
@@ -149,19 +207,6 @@ final class ConsoleModel: ObservableObject {
         count += 1
         lines.append(LogLine(id: count, text: text, kind: kind))
         if lines.count > Self.limit { lines.removeFirst(lines.count - Self.limit) }
-    }
-
-    private func readFiles() {
-        for index in readers.indices {
-            guard let data = try? readers[index].handle.readToEnd(), !data.isEmpty else { continue }
-            var all = readers[index].rest + data
-            while let newline = all.firstIndex(of: 0x0A) {
-                let text = String(decoding: all[all.startIndex..<newline], as: UTF8.self)
-                if !text.isEmpty { add(text, readers[index].kind) }
-                all = all[all.index(after: newline)...]
-            }
-            readers[index].rest = Data(all)
-        }
     }
 
     /// Lines look like "2026-11-27 11:36:36.036 E  App[123:abc] [subsystem:category] message".
