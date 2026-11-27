@@ -252,10 +252,13 @@ Saguru prefiere decir lo que no hace. Lo mismo aparece dentro de cada herramient
   sesión (4K se entrega a 1080p), acostados salvo que la app gire la conexión, en el formato de píxel que pida (YUV
   por defecto) y con la frontal espejada en el visor. No están cubiertos el escáner de documentos de VisionKit ni
   `DataScanner`: una app que abra el escáner de documentos con la cámara activa se cierra. El aviso de códigos de
-  iOS (`AVCaptureMetadataOutput`) solo entrega QR. No hay video grabado ni profundidad; zoom, linterna, enfoque y
+  iOS (`AVCaptureMetadataOutput`) solo entrega QR. No hay video grabado (pedirlo termina la grabación con un error, sin cerrar la app) ni profundidad; el micrófono no se toca; zoom, linterna, enfoque y
   exposición se aceptan y se recuerdan, pero no cambian la imagen. Los cambios de enfoque o exposición no se
   notifican a quien los observe. Se ha probado con apps de prueba y con un flujo real de captura de
   identificaciones, usando una credencial ficticia; no con todas las formas de usar la cámara.
+- `scripts/test-camera.sh` pasa el agente de cámara por quince formas de usar una cámara (montar y desmontar,
+  cambiar de frontal a trasera, fotos con las tres generaciones de API, códigos, sesiones cableadas a mano, varios
+  hilos a la vez…), cada una en su proceso. Si tu app hace algo que no está ahí y falla, ese es el issue que más ayuda.
 - La cámara simulada responde con «nada» (nil, cero) a cualquier método de `AVCaptureDevice` y compañía que no
   tenga respuesta propia, en vez de cerrar la app, y lo anota una vez en el registro de la app:
   `Saguru camera: -[AVCaptureDevice …] has no stand-in`. Si tu app se comporta raro con la cámara, busca esas líneas. Un

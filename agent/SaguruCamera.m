@@ -438,12 +438,51 @@ static void Tick(void) {
 
 #define SWAP(cls, sel, fn, store) do { Method m = class_getInstanceMethod(cls, @selector(sel)); if (m) store = (void *)method_setImplementation(m, (IMP)fn); else NSLog(@"Saguru camera: missing %s", #sel); } while (0)
 
-static AVCaptureDevice *DefaultDevice(id s, SEL c, AVMediaType t) { return [t isEqualToString:AVMediaTypeVideo] ? Camera(AVCaptureDevicePositionBack) : nil; }
-static AVCaptureDevice *DefaultDevice3(id s, SEL c, AVCaptureDeviceType dt, AVMediaType t, AVCaptureDevicePosition p) { return (!t || [t isEqualToString:AVMediaTypeVideo]) ? Camera(p) : nil; }
+// Only the camera is Saguru's business. Anything asked about another kind of device (the microphone,
+// above all) gets Apple's own answer, as if Saguru were not there.
+static BOOL IsVideo(AVMediaType t) { return !t || [t isEqualToString:AVMediaTypeVideo]; }
+static AVCaptureDevice *(*oDefaultDevice)(id, SEL, AVMediaType);
+static AVCaptureDevice *DefaultDevice(id s, SEL c, AVMediaType t) { return [t isEqualToString:AVMediaTypeVideo] ? Camera(AVCaptureDevicePositionBack) : oDefaultDevice(s, c, t); }
+static AVCaptureDevice *(*oDefaultDevice3)(id, SEL, AVCaptureDeviceType, AVMediaType, AVCaptureDevicePosition);
+static AVCaptureDevice *DefaultDevice3(id s, SEL c, AVCaptureDeviceType dt, AVMediaType t, AVCaptureDevicePosition p) {
+    if (!IsVideo(t) || [dt isEqualToString:AVCaptureDeviceTypeMicrophone]) return oDefaultDevice3(s, c, dt, t, p);
+    return Camera(p);
+}
 static NSArray *Devices(id s, SEL c) { return @[Camera(AVCaptureDevicePositionBack), Camera(AVCaptureDevicePositionFront)]; }
-static NSArray *DevicesWith(id s, SEL c, AVMediaType t) { return [t isEqualToString:AVMediaTypeVideo] ? Devices(s, c) : @[]; }
-static AVAuthorizationStatus Status(id s, SEL c, AVMediaType t) { return AVAuthorizationStatusAuthorized; }
-static void Request(id s, SEL c, AVMediaType t, void (^done)(BOOL)) { if (done) dispatch_async(dispatch_get_global_queue(0, 0), ^{ done(YES); }); }
+static NSArray *(*oDevicesWith)(id, SEL, AVMediaType);
+static NSArray *DevicesWith(id s, SEL c, AVMediaType t) { return [t isEqualToString:AVMediaTypeVideo] ? Devices(s, c) : oDevicesWith(s, c, t); }
+static AVCaptureDevice *(*oDeviceWithID)(id, SEL, NSString *);
+static AVCaptureDevice *DeviceWithID(id s, SEL c, NSString *identifier) {
+    for (AVCaptureDevice *camera in Devices(s, c)) if ([camera.uniqueID isEqualToString:identifier]) return camera;
+    return oDeviceWithID(s, c, identifier);
+}
+static AVCaptureDevice *Preferred(id s, SEL c) { return Camera(AVCaptureDevicePositionBack); }
+static void SetPreferred(id s, SEL c, AVCaptureDevice *device) {}
+static AVAuthorizationStatus (*oStatus)(id, SEL, AVMediaType);
+static AVAuthorizationStatus Status(id s, SEL c, AVMediaType t) { return [t isEqualToString:AVMediaTypeVideo] ? AVAuthorizationStatusAuthorized : oStatus(s, c, t); }
+static void (*oRequest)(id, SEL, AVMediaType, void (^)(BOOL));
+static void Request(id s, SEL c, AVMediaType t, void (^done)(BOOL)) {
+    if (![t isEqualToString:AVMediaTypeVideo]) { oRequest(s, c, t, done); return; }
+    if (done) dispatch_async(dispatch_get_global_queue(0, 0), ^{ done(YES); });
+}
+
+// A search remembers what it was asked for, so one for the front camera does not come back with the back one first.
+static char kSearchVideo, kSearchSpot;
+static id (*oSearch)(id, SEL, NSArray *, AVMediaType, AVCaptureDevicePosition);
+static id Search(id s, SEL c, NSArray *types, AVMediaType t, AVCaptureDevicePosition p) {
+    id found = oSearch(s, c, types, t, p);
+    BOOL cameras = IsVideo(t) && !(types.count && [types isEqualToArray:@[AVCaptureDeviceTypeMicrophone]]);
+    if (found) { objc_setAssociatedObject(found, &kSearchVideo, @(cameras), OBJC_ASSOCIATION_RETAIN); objc_setAssociatedObject(found, &kSearchSpot, @(p), OBJC_ASSOCIATION_RETAIN); }
+    return found;
+}
+static NSArray *(*oSearchDevices)(id, SEL);
+static NSArray *SearchDevices(id s, SEL c) {
+    NSNumber *cameras = objc_getAssociatedObject(s, &kSearchVideo);
+    if (cameras && !cameras.boolValue) return oSearchDevices(s, c);
+    AVCaptureDevicePosition spot = [objc_getAssociatedObject(s, &kSearchSpot) integerValue];
+    return spot == AVCaptureDevicePositionUnspecified ? Devices(s, c) : @[Camera(spot)];
+}
+static NSArray *SearchSets(id s, SEL c) { return @[]; }
 
 static id (*oInputClass)(id, SEL, AVCaptureDevice *, NSError **);
 static id InputClass(id s, SEL c, AVCaptureDevice *d, NSError **e) { if (!IsOurs(d)) return oInputClass(s, c, d, e); SaguruInput *i = Bare(SaguruInput.class); i.fake = d; return i; }
@@ -511,6 +550,7 @@ static AVCaptureConnection *LayerConnection(id layer, SEL c) { return [gLayers c
 static BOOL Running(id s, SEL c) { return [objc_getAssociatedObject(s, &kRunning) boolValue]; }
 static void Nothing(id s, SEL c) {}
 static BOOL Yes1(id s, SEL c, id x) { return YES; }
+static void AddNothing(id s, SEL c, id x) {}
 
 static NSArray *MetaAvailable(id s, SEL c) { return @[AVMetadataObjectTypeQRCode, AVMetadataObjectTypeEAN13Code, AVMetadataObjectTypeEAN8Code, AVMetadataObjectTypeCode128Code, AVMetadataObjectTypePDF417Code, AVMetadataObjectTypeAztecCode, AVMetadataObjectTypeDataMatrixCode]; }
 static void MetaSet(id s, SEL c, NSArray *types) { objc_setAssociatedObject(s, &kTypes, [types copy], OBJC_ASSOCIATION_RETAIN); }
@@ -536,28 +576,105 @@ static id Transformed(AVCaptureVideoPreviewLayer *layer, SEL c, AVMetadataObject
     return moved;
 }
 
+// Where a point of the preview falls on the camera, and back. The camera's own coordinates run 0 to 1 over
+// the sensor lying on its side: a phone held upright has the sensor's (0,0) at the top right of the picture.
+static CGRect PictureRect(AVCaptureVideoPreviewLayer *layer) {
+    CGSize view = layer.bounds.size, image = gPixels ? CGSizeMake(CVPixelBufferGetWidth(gPixels), CVPixelBufferGetHeight(gPixels)) : CGSizeMake(1080, 1920);
+    if (view.width <= 0 || view.height <= 0) return CGRectMake(0, 0, 1, 1);
+    NSString *g = layer.videoGravity;
+    if ([g isEqual:AVLayerVideoGravityResize]) return CGRectMake(0, 0, view.width, view.height);
+    CGFloat scale = [g isEqual:AVLayerVideoGravityResizeAspectFill] ? MAX(view.width / image.width, view.height / image.height) : MIN(view.width / image.width, view.height / image.height);
+    return CGRectMake((view.width - image.width * scale) / 2, (view.height - image.height * scale) / 2, image.width * scale, image.height * scale);
+}
+static CGPoint DevicePoint(AVCaptureVideoPreviewLayer *layer, SEL c, CGPoint p) {
+    CGRect r = PictureRect(layer); CGFloat u = (p.x - r.origin.x) / r.size.width, v = (p.y - r.origin.y) / r.size.height;
+    return CGPointMake(v, 1 - u);
+}
+static CGPoint LayerPoint(AVCaptureVideoPreviewLayer *layer, SEL c, CGPoint p) {
+    CGRect r = PictureRect(layer);
+    return CGPointMake(r.origin.x + (1 - p.y) * r.size.width, r.origin.y + p.x * r.size.height);
+}
+static CGRect DeviceRect(AVCaptureVideoPreviewLayer *layer, SEL c, CGRect rect) {
+    CGPoint a = DevicePoint(layer, c, CGPointMake(CGRectGetMaxX(rect), CGRectGetMinY(rect))), b = DevicePoint(layer, c, CGPointMake(CGRectGetMinX(rect), CGRectGetMaxY(rect)));
+    return CGRectMake(a.x, a.y, b.x - a.x, b.y - a.y);
+}
+static CGRect LayerRect(AVCaptureVideoPreviewLayer *layer, SEL c, CGRect rect) {
+    CGPoint a = LayerPoint(layer, c, CGPointMake(CGRectGetMinX(rect), CGRectGetMaxY(rect))), b = LayerPoint(layer, c, CGPointMake(CGRectGetMaxX(rect), CGRectGetMinY(rect)));
+    return CGRectMake(a.x, a.y, b.x - a.x, b.y - a.y);
+}
+
 static CMVideoDimensions PhotoSize(id s, SEL c);
+
+static NSData *CopyJPEG(void) {
+    if (!gPixels) return nil;
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    NSData *jpeg = [gContext JPEGRepresentationOfImage:[CIImage imageWithCVPixelBuffer:gPixels] colorSpace:space options:@{}];
+    CGColorSpaceRelease(space);
+    return jpeg;
+}
+
+/// A JPEG the way the older photo calls hand it over: inside a sample buffer.
+static CMSampleBufferRef CopyJPEGSample(NSData *jpeg, int32_t width, int32_t height) {
+    if (!jpeg.length) return NULL;
+    CMBlockBufferRef block = NULL;
+    if (CMBlockBufferCreateWithMemoryBlock(NULL, NULL, jpeg.length, NULL, NULL, 0, jpeg.length, kCMBlockBufferAssureMemoryNowFlag, &block) != noErr || !block) return NULL;
+    CMBlockBufferReplaceDataBytes(jpeg.bytes, block, 0, jpeg.length);
+    CMVideoFormatDescriptionRef format = NULL; CMVideoFormatDescriptionCreate(NULL, kCMVideoCodecType_JPEG, width, height, NULL, &format);
+    CMSampleBufferRef sample = NULL; size_t size = jpeg.length;
+    CMSampleTimingInfo timing = { kCMTimeInvalid, CMClockGetTime(CMClockGetHostTimeClock()), kCMTimeInvalid };
+    CMSampleBufferCreateReady(NULL, block, format, 1, 1, &timing, 1, &size, &sample);
+    if (format) CFRelease(format);
+    CFRelease(block);
+    return sample;
+}
+
 /// Takes the photo and tells the delegate every step a real capture goes through, in the same order:
-/// some apps wait for the last one before moving on.
+/// some apps wait for the last one before moving on. A delegate written for the photo call of iOS 10
+/// gets its photo the way that call gave it.
 static void Capture(AVCapturePhotoOutput *output, SEL c, AVCapturePhotoSettings *settings, id<AVCapturePhotoCaptureDelegate> delegate) {
     int64_t number = settings.uniqueID;
     dispatch_async(gFeed, ^{
         SaguruResolved *resolved = Bare(SaguruResolved.class); resolved.number = number;
         SaguruPhoto *photo = Bare(SaguruPhoto.class); photo.resolved = resolved;
-        if (gPixels) {
-            resolved.size = (CMVideoDimensions){(int32_t)CVPixelBufferGetWidth(gPixels), (int32_t)CVPixelBufferGetHeight(gPixels)};
-            CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-            photo.jpeg = [gContext JPEGRepresentationOfImage:[CIImage imageWithCVPixelBuffer:gPixels] colorSpace:space options:@{}];
-            CGColorSpaceRelease(space);
-        }
+        if (gPixels) resolved.size = (CMVideoDimensions){(int32_t)CVPixelBufferGetWidth(gPixels), (int32_t)CVPixelBufferGetHeight(gPixels)};
+        photo.jpeg = CopyJPEG();
         NSError *failure = photo.jpeg ? nil : [NSError errorWithDomain:AVFoundationErrorDomain code:AVErrorUnknown userInfo:@{NSLocalizedDescriptionKey: @"Saguru has no picture to give yet."}];
         if ([delegate respondsToSelector:@selector(captureOutput:willBeginCaptureForResolvedSettings:)]) [delegate captureOutput:output willBeginCaptureForResolvedSettings:resolved];
         if ([delegate respondsToSelector:@selector(captureOutput:willCapturePhotoForResolvedSettings:)]) [delegate captureOutput:output willCapturePhotoForResolvedSettings:resolved];
         if ([delegate respondsToSelector:@selector(captureOutput:didCapturePhotoForResolvedSettings:)]) [delegate captureOutput:output didCapturePhotoForResolvedSettings:resolved];
+        SEL old = NSSelectorFromString(@"captureOutput:didFinishProcessingPhotoSampleBuffer:previewPhotoSampleBuffer:resolvedSettings:bracketSettings:error:");
         if ([delegate respondsToSelector:@selector(captureOutput:didFinishProcessingPhoto:error:)]) [delegate captureOutput:output didFinishProcessingPhoto:photo error:failure];
+        else if ([delegate respondsToSelector:old]) {
+            CMSampleBufferRef sample = CopyJPEGSample(photo.jpeg, resolved.size.width, resolved.size.height);
+            ((void (*)(id, SEL, id, CMSampleBufferRef, CMSampleBufferRef, id, id, NSError *))objc_msgSend)(delegate, old, output, sample, NULL, resolved, nil, failure);
+            if (sample) CFRelease(sample);
+        }
         if ([delegate respondsToSelector:@selector(captureOutput:didFinishCaptureForResolvedSettings:error:)]) [delegate captureOutput:output didFinishCaptureForResolvedSettings:resolved error:failure];
     });
 }
+static void Prepare(id output, SEL c, NSArray *settings, void (^done)(BOOL, NSError *)) { if (done) dispatch_async(dispatch_get_global_queue(0, 0), ^{ done(YES, nil); }); }
+static NSArray *PreviewFormats(id settings, SEL c) { return @[@(kCVPixelFormatType_32BGRA)]; }
+static NSArray *ThumbnailCodecs(id settings, SEL c) { return @[AVVideoCodecTypeJPEG]; }
+
+/// The still-image call that came before AVCapturePhotoOutput. Apps that never moved on still use it.
+static void CaptureStill(id output, SEL c, AVCaptureConnection *connection, void (^done)(CMSampleBufferRef, NSError *)) {
+    if (!done) return;
+    dispatch_async(gFeed, ^{
+        NSData *jpeg = CopyJPEG();
+        CMSampleBufferRef sample = jpeg ? CopyJPEGSample(jpeg, (int32_t)CVPixelBufferGetWidth(gPixels), (int32_t)CVPixelBufferGetHeight(gPixels)) : NULL;
+        done(sample, sample ? nil : [NSError errorWithDomain:AVFoundationErrorDomain code:AVErrorUnknown userInfo:@{NSLocalizedDescriptionKey: @"Saguru has no picture to give yet."}]);
+        if (sample) CFRelease(sample);
+    });
+}
+
+/// Saguru records no video. Asking for it used to raise, with no camera wired to the output; now the
+/// recording ends at once with an error that says so, the way a recording that cannot start does.
+static void Record(AVCaptureFileOutput *output, SEL c, NSURL *file, id<AVCaptureFileOutputRecordingDelegate> delegate) {
+    NSLog(@"Saguru camera: video recording was asked for; Saguru does not record, and says so to the delegate");
+    NSError *failure = [NSError errorWithDomain:AVFoundationErrorDomain code:AVErrorSessionNotRunning userInfo:@{NSLocalizedDescriptionKey: @"La cámara de Saguru no graba video.", AVErrorRecordingSuccessfullyFinishedKey: @NO}];
+    dispatch_async(dispatch_get_main_queue(), ^{ [delegate captureOutput:output didFinishRecordingToOutputFileAtURL:file fromConnections:@[] error:failure]; });
+}
+static BOOL No0(id s, SEL c) { return NO; }
 
 /// The photo output's settings are checked against a real camera's formats; without one, setting them
 /// raises. They are simply remembered instead.
@@ -718,9 +835,38 @@ static void Note(id object, SEL selector) {
 static id NetNothing(id s, SEL c) { Note(s, c); return nil; }
 static double NetDouble(id s, SEL c) { Note(s, c); return 0; }
 static float NetFloat(id s, SEL c) { Note(s, c); return 0; }
+// Methods that return a structure, by the shape of what they return: the compiler returns each shape its
+// own way (in registers, or through a pointer the caller passes), so each needs a stand-in of that shape.
+typedef struct { double a, b; } Two;      typedef struct { double a, b, c, d; } Four;      typedef struct { double a[6]; } Six;
+typedef struct { float a, b; } TwoF;      typedef struct { float a, b, c; } ThreeF;        typedef struct { float a, b, c, d; } FourF;
+typedef struct { int32_t a, b; } Pair;    typedef struct { int64_t a, b; } Wide;
+static Two NetTwo(id s, SEL c) { Note(s, c); return (Two){0}; }
+static Four NetFour(id s, SEL c) { Note(s, c); return (Four){0}; }
+static Six NetSix(id s, SEL c) { Note(s, c); return (Six){{0}}; }
+static TwoF NetTwoF(id s, SEL c) { Note(s, c); return (TwoF){0}; }
+static ThreeF NetThreeF(id s, SEL c) { Note(s, c); return (ThreeF){0}; }
+static FourF NetFourF(id s, SEL c) { Note(s, c); return (FourF){0}; }
+static Pair NetPair(id s, SEL c) { Note(s, c); return (Pair){0}; }
+static Wide NetWide(id s, SEL c) { Note(s, c); return (Wide){0}; }
+static CMTime NetTime(id s, SEL c) { Note(s, c); return kCMTimeInvalid; }
+static CMTimeRange NetRange(id s, SEL c) { Note(s, c); return kCMTimeRangeInvalid; }
+/// The stand-in for a structure with this encoding, or NULL for a shape not listed here.
+static IMP NetShape(const char *type) {
+    static NSDictionary<NSString *, NSValue *> *shapes; static dispatch_once_t once;
+    dispatch_once(&once, ^{ shapes = @{
+        @(@encode(CGPoint)): [NSValue valueWithPointer:NetTwo], @(@encode(CGSize)): [NSValue valueWithPointer:NetTwo],
+        @(@encode(CGRect)): [NSValue valueWithPointer:NetFour], @(@encode(CGAffineTransform)): [NSValue valueWithPointer:NetSix],
+        @(@encode(CMTime)): [NSValue valueWithPointer:NetTime], @(@encode(CMTimeRange)): [NSValue valueWithPointer:NetRange],
+        @(@encode(CMVideoDimensions)): [NSValue valueWithPointer:NetPair],
+        @(@encode(AVCaptureWhiteBalanceGains)): [NSValue valueWithPointer:NetThreeF],
+        @(@encode(AVCaptureWhiteBalanceChromaticityValues)): [NSValue valueWithPointer:NetTwoF],
+        @(@encode(AVCaptureWhiteBalanceTemperatureAndTintValues)): [NSValue valueWithPointer:NetTwoF],
+    }; });
+    return (IMP)shapes[@(type)].pointerValue;
+}
 /// Gives a pretend class a harmless answer for every method of Apple's class it does not answer itself.
-/// Apple's would read inner state the pretend object never had. Methods that return a structure are left
-/// alone: there is no one way to return those.
+/// Apple's would read inner state the pretend object never had. A method returning a structure gets a
+/// stand-in when its shape is one of those listed above; any other is left alone.
 static void Net(Class ours, Class theirs) {
     for (Class from = theirs; from && from != NSObject.class; from = class_getSuperclass(from)) {
         unsigned count = 0; Method *list = class_copyMethodList(from, &count);
@@ -728,9 +874,9 @@ static void Net(Class ours, Class theirs) {
             const char *name = sel_getName(method_getName(list[i]));
             if (!strncmp(name, "init", 4) || !strcmp(name, "dealloc") || name[0] == '.' || !strcmp(name, "description") || !strcmp(name, "debugDescription")
                 || !strcmp(name, "isEqual:") || !strcmp(name, "hash") || !strncmp(name, "observeValueForKeyPath", 22)) continue;
-            char type[8]; method_getReturnType(list[i], type, sizeof type);
+            char type[256]; method_getReturnType(list[i], type, sizeof type);
             const char *t = type; while (*t && strchr("rnNoORV", *t)) t++;
-            IMP answer = *t == 'd' ? (IMP)NetDouble : *t == 'f' ? (IMP)NetFloat : (*t && strchr("v@#:BcCsSiIlLqQ*^", *t)) ? (IMP)NetNothing : NULL;
+            IMP answer = *t == 'd' ? (IMP)NetDouble : *t == 'f' ? (IMP)NetFloat : (*t && strchr("v@#:BcCsSiIlLqQ*^", *t)) ? (IMP)NetNothing : *t == '{' ? NetShape(t) : NULL;
             if (answer) class_addMethod(ours, method_getName(list[i]), answer, method_getTypeEncoding(list[i]));   // fails, rightly, where ours answers already
         }
         free(list);
@@ -766,19 +912,26 @@ __attribute__((constructor)) static void SaguruCameraLoad(void) {
     gSessions = [NSHashTable weakObjectsHashTable]; gLayers = [NSHashTable weakObjectsHashTable];
     void *unused;
     Class dev = object_getClass(AVCaptureDevice.class);
-    SWAP(dev, defaultDeviceWithMediaType:, DefaultDevice, unused);
-    SWAP(dev, defaultDeviceWithDeviceType:mediaType:position:, DefaultDevice3, unused);
+    SWAP(dev, defaultDeviceWithMediaType:, DefaultDevice, oDefaultDevice);
+    SWAP(dev, defaultDeviceWithDeviceType:mediaType:position:, DefaultDevice3, oDefaultDevice3);
     SWAP(dev, devices, Devices, unused);
-    SWAP(dev, devicesWithMediaType:, DevicesWith, unused);
-    SWAP(dev, authorizationStatusForMediaType:, Status, unused);
-    SWAP(dev, requestAccessForMediaType:completionHandler:, Request, unused);
-    SWAP(AVCaptureDeviceDiscoverySession.class, devices, Devices, unused);
+    SWAP(dev, devicesWithMediaType:, DevicesWith, oDevicesWith);
+    SWAP(dev, deviceWithUniqueID:, DeviceWithID, oDeviceWithID);
+    SWAP(dev, userPreferredCamera, Preferred, unused); SWAP(dev, systemPreferredCamera, Preferred, unused); SWAP(dev, setUserPreferredCamera:, SetPreferred, unused);
+    SWAP(dev, authorizationStatusForMediaType:, Status, oStatus);
+    SWAP(dev, requestAccessForMediaType:completionHandler:, Request, oRequest);
+    SWAP(object_getClass(AVCaptureDeviceDiscoverySession.class), discoverySessionWithDeviceTypes:mediaType:position:, Search, oSearch);
+    SWAP(AVCaptureDeviceDiscoverySession.class, devices, SearchDevices, oSearchDevices);
+    SWAP(AVCaptureDeviceDiscoverySession.class, supportedMultiCamDeviceSets, SearchSets, unused);
     SWAP(object_getClass(AVCaptureDeviceInput.class), deviceInputWithDevice:error:, InputClass, oInputClass);
     SWAP(AVCaptureDeviceInput.class, initWithDevice:error:, InputInit, oInputInit);
     Class ses = AVCaptureSession.class;
     SWAP(ses, canAddInput:, CanAdd, unused); SWAP(ses, canAddOutput:, CanAdd, unused);
     SWAP(ses, addInput:, AddInput, unused); SWAP(ses, addOutput:, AddOutput, unused);
     SWAP(ses, removeInput:, Remove, unused); SWAP(ses, removeOutput:, Remove, unused);
+    // Sessions wired by hand: the parts are taken the same way, and the wires themselves are not needed.
+    SWAP(ses, addInputWithNoConnections:, AddInput, unused); SWAP(ses, addOutputWithNoConnections:, AddOutput, unused);
+    SWAP(ses, canAddConnection:, Yes1, unused); SWAP(ses, addConnection:, AddNothing, unused); SWAP(ses, removeConnection:, AddNothing, unused);
     SWAP(ses, inputs, Inputs, unused); SWAP(ses, outputs, Outputs, unused);
     SWAP(ses, startRunning, Start, unused); SWAP(ses, stopRunning, Stop, unused); SWAP(ses, isRunning, Running, unused);
     SWAP(ses, beginConfiguration, Nothing, unused); SWAP(ses, commitConfiguration, Nothing, unused);
@@ -798,6 +951,15 @@ __attribute__((constructor)) static void SaguruCameraLoad(void) {
     SWAP(photo, setHighResolutionCaptureEnabled:, SetPhotoHigh, unused); SWAP(photo, isHighResolutionCaptureEnabled, PhotoHigh, unused);
     SWAP(photo, availablePhotoCodecTypes, PhotoCodecs, unused); SWAP(photo, availablePhotoPixelFormatTypes, PhotoPixelFormats, unused);
     SWAP(photo, supportedFlashModes, PhotoFlashModes, unused);
+    SWAP(photo, setPreparedPhotoSettingsArray:completionHandler:, Prepare, unused);
+    SWAP(AVCapturePhotoSettings.class, availablePreviewPhotoPixelFormatTypes, PreviewFormats, unused);
+    SWAP(AVCapturePhotoSettings.class, availableEmbeddedThumbnailPhotoCodecTypes, ThumbnailCodecs, unused);
+    Class still = NSClassFromString(@"AVCaptureStillImageOutput");
+    if (still) { SWAP(still, captureStillImageAsynchronouslyFromConnection:completionHandler:, CaptureStill, unused); }
+    Class movie = AVCaptureMovieFileOutput.class;
+    SWAP(movie, startRecordingToOutputFileURL:recordingDelegate:, Record, unused); SWAP(movie, stopRecording, Nothing, unused); SWAP(movie, isRecording, No0, unused);
+    SWAP(layer, captureDevicePointOfInterestForPoint:, DevicePoint, unused); SWAP(layer, pointForCaptureDevicePointOfInterest:, LayerPoint, unused);
+    SWAP(layer, metadataOutputRectOfInterestForRect:, DeviceRect, unused); SWAP(layer, rectForMetadataOutputRectOfInterest:, LayerRect, unused);
     Class picker = UIImagePickerController.class, pickerMeta = object_getClass(picker);
     SWAP(pickerMeta, isSourceTypeAvailable:, SourceAvailable, oSourceAvailable);
     SWAP(pickerMeta, isCameraDeviceAvailable:, CameraDeviceAvailable, unused);
