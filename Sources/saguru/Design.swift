@@ -137,7 +137,7 @@ struct OverlayView: View {
                             .offset(x: rect.minX, y: rect.minY)
                     }
                     if let text = mark.number.map({ "\($0)" }) ?? mark.label {
-                        Text(text)
+                        Text(tr(text))
                             .font(.system(size: mark.tone == .measure ? 9 : 10, weight: .bold).monospacedDigit())
                             .foregroundStyle(.white)
                             .padding(.horizontal, 4).padding(.vertical, 1)
@@ -172,7 +172,7 @@ struct OverlayView: View {
             let last = model.guides.last
             let label = last.map { "\(Int(cursor.x)), \(Int(cursor.y))   Δ \(Int(abs(cursor.x - $0.x))) × \(Int(abs(cursor.y - $0.y)))" }
                 ?? "\(Int(cursor.x)), \(Int(cursor.y))"
-            Text(label)
+            Text(tr(label))
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)

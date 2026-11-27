@@ -41,7 +41,7 @@ enum Simctl {
         p.standardOutput = out
         p.standardError = err
         if input != nil { p.standardInput = stdin }
-        do { try p.run() } catch { throw SimError(description: "no se pudo ejecutar xcrun simctl (¿está instalado Xcode?)") }
+        do { try p.run() } catch { throw SimError(description: tr("no se pudo ejecutar xcrun simctl (¿está instalado Xcode?)")) }
         if let input {
             stdin.fileHandleForWriting.write(input)
             try? stdin.fileHandleForWriting.close()
@@ -116,10 +116,10 @@ enum Simctl {
     @discardableResult
     static func push(_ udid: String, bundleID: String, payload: Data) throws -> NotificationPermission {
         guard (try? JSONSerialization.jsonObject(with: payload)) is [String: Any] else {
-            throw SimError(description: "el payload no es un JSON válido")
+            throw SimError(description: tr("el payload no es un JSON válido"))
         }
         guard apps(udid).contains(where: { $0.bundleID == bundleID }) else {
-            throw SimError(description: "\(bundleID) no está instalada en este simulador")
+            throw SimError(description: tr("%@ no está instalada en este simulador", "\(bundleID)"))
         }
         try run(["push", udid, bundleID, "-"], input: payload)
         return notificationPermission(udid, bundleID: bundleID)
@@ -160,9 +160,9 @@ enum Simctl {
     }
 
     static func addMedia(_ udid: String, files: [URL]) throws {
-        guard !files.isEmpty else { throw SimError(description: "no se indicó ningún archivo") }
+        guard !files.isEmpty else { throw SimError(description: tr("no se indicó ningún archivo")) }
         for file in files where !FileManager.default.fileExists(atPath: file.path) {
-            throw SimError(description: "no existe \(file.path)")
+            throw SimError(description: tr("no existe %@", "\(file.path)"))
         }
         try run(["addmedia", udid] + files.map(\.path))
     }
@@ -174,9 +174,9 @@ enum Simctl {
             // simctl only gives an OSStatus; these two are the ones a person can act on.
             if error.description.contains("-10814") {
                 let scheme = url.components(separatedBy: ":").first ?? url
-                throw SimError(description: "ninguna app de este simulador abre «\(scheme)://»")
+                throw SimError(description: tr("ninguna app de este simulador abre «%@://»", "\(scheme)"))
             }
-            if error.description.contains("code=-50") { throw SimError(description: "«\(url)» no es una URL válida") }
+            if error.description.contains("code=-50") { throw SimError(description: tr("«%@» no es una URL válida", "\(url)")) }
             throw error
         }
     }
@@ -285,7 +285,7 @@ enum Simctl {
         do {
             try run(["status_bar", udid, "override", "--time", time.isEmpty ? "9:41" : time])
         } catch {
-            throw SimError(description: "el simulador no acepta la hora «\(time)». Usa el formato 9:41; las horas en punto (12:00) las rechaza, prueba 12:01")
+            throw SimError(description: tr("el simulador no acepta la hora «%@». Usa el formato 9:41; las horas en punto (12:00) las rechaza, prueba 12:01", "\(time)"))
         }
     }
 
@@ -343,7 +343,7 @@ enum Simctl {
     static func dataContainer(_ udid: String, bundleID: String) throws -> URL {
         let path = (try? run(["get_app_container", udid, bundleID, "data"]))
             .flatMap { String(data: $0, encoding: .utf8) }?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !path.isEmpty else { throw SimError(description: "\(bundleID) no está instalada en este simulador") }
+        guard !path.isEmpty else { throw SimError(description: tr("%@ no está instalada en este simulador", "\(bundleID)")) }
         return URL(fileURLWithPath: path)
     }
 

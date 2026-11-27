@@ -19,14 +19,14 @@ struct OnboardingView: View {
     }
 
     private let pages = [
-        Page(picture: "step1", symbol: "chevron.right.2", title: "Bienvenido a Saguru",
-             text: "Un panel que vive pegado a tu Simulador de iOS. Lo despliegas con » cuando lo necesitas y lo pliegas cuando no: nunca tapa tu trabajo."),
-        Page(picture: "step2", symbol: "square.grid.3x3", title: "Empieza por elegir tu app",
-             text: "Saguru trabaja sobre una app del simulador. Al elegirla verás su versión, su compilación y lo que declara, y todas las herramientas apuntarán a ella."),
-        Page(picture: "step3", symbol: "wand.and.stars", title: "Lo que al simulador le falta",
-             text: "Mira y sustituye lo que tu app le pide al servidor, dale una cámara, lee su consola y por qué se cerró. Algunas herramientas relanzan la app para entrar en ella; Saguru te lo dice antes de hacerlo."),
-        Page(picture: "step4", symbol: "checkmark.seal", title: "Todo listo",
-             text: "Las herramientas de diseño (cuadrícula, reglas, colores y accesibilidad) leen la ventana del Simulador, y macOS pide permiso para eso. Puedes darlo ahora o cuando las uses."),
+        Page(picture: "step1", symbol: "chevron.right.2", title: tr("Bienvenido a Saguru"),
+             text: tr("Un panel que vive pegado a tu Simulador de iOS. Lo despliegas con » cuando lo necesitas y lo pliegas cuando no: nunca tapa tu trabajo.")),
+        Page(picture: "step2", symbol: "square.grid.3x3", title: tr("Empieza por elegir tu app"),
+             text: tr("Saguru trabaja sobre una app del simulador. Al elegirla verás su versión, su compilación y lo que declara, y todas las herramientas apuntarán a ella.")),
+        Page(picture: "step3", symbol: "wand.and.stars", title: tr("Lo que al simulador le falta"),
+             text: tr("Mira y sustituye lo que tu app le pide al servidor, dale una cámara, lee su consola y por qué se cerró. Algunas herramientas relanzan la app para entrar en ella; Saguru te lo dice antes de hacerlo.")),
+        Page(picture: "step4", symbol: "checkmark.seal", title: tr("Todo listo"),
+             text: tr("Las herramientas de diseño (cuadrícula, reglas, colores y accesibilidad) leen la ventana del Simulador, y macOS pide permiso para eso. Puedes darlo ahora o cuando las uses.")),
     ]
 
     private static let tools: [(String, String)] = [("network", "Red"), ("camera", "Cámara"), ("terminal", "Registro"), ("bell.badge", "Push"),
@@ -46,8 +46,8 @@ struct OnboardingView: View {
             VStack(spacing: 22) {
                 picture(page)
                 VStack(spacing: 10) {
-                    Text(page.title).font(.system(size: 28, weight: .bold)).multilineTextAlignment(.center)
-                    Text(page.text).font(.system(size: 14.5)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text(tr(page.title)).font(.system(size: 28, weight: .bold)).multilineTextAlignment(.center)
+                    Text(tr(page.text)).font(.system(size: 14.5)).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         .lineSpacing(3).frame(maxWidth: 470).fixedSize(horizontal: false, vertical: true)
                 }
                 if step == 2 { chips }
@@ -68,9 +68,9 @@ struct OnboardingView: View {
                             .frame(width: index == step ? 22 : 7, height: 7)
                     }
                 }
-                .accessibilityElement().accessibilityLabel("Paso \(step + 1) de \(pages.count)")
+                .accessibilityElement().accessibilityLabel(tr("Paso %@ de %@", "\(step + 1)", "\(pages.count)"))
                 Spacer()
-                Button(step == pages.count - 1 ? "Empezar" : "Siguiente") { step == pages.count - 1 ? finish() : go(1) }
+                Button(step == pages.count - 1 ? "Empezar" : tr("Siguiente")) { step == pages.count - 1 ? finish() : go(1) }
                     .buttonStyle(PrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
@@ -119,7 +119,7 @@ struct OnboardingView: View {
                     ForEach(row, id: \.1) { symbol, name in
                         HStack(spacing: 5) {
                             Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
-                            Text(name).font(.system(size: 12, weight: .medium))
+                            Text(tr(name)).font(.system(size: 12, weight: .medium))
                         }
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(Color.white.opacity(0.08), in: Capsule())

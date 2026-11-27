@@ -19,7 +19,7 @@
 
 **Saguru** (探る, "to probe") is a panel that docks to the iOS Simulator window, plus a CLI with the same actions. It brings together what usually takes several tools, a proxy with certificates, or a real device.
 
-> The interface is in Spanish for now. The recordings below show it as it is today.
+> The interface comes in Spanish, English, Simplified Chinese and Japanese; it follows your system language and can be changed from the `…` menu. The recordings below show it in Spanish.
 
 <p align="center">
   <img src="assets/red.gif" alt="Saguru unfolds beside the Simulator and captures the app's requests" width="900">

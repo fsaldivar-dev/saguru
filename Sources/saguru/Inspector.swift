@@ -36,15 +36,15 @@ struct AXNode: Identifiable {
     /// The kind of element, the way VoiceOver says it after the label.
     var kind: String {
         switch role {
-        case "AXButton", "AXPopUpButton", "AXMenuButton": return "botón"
+        case "AXButton", "AXPopUpButton", "AXMenuButton": return tr("botón")
         case "AXHeading": return "encabezado"
         case "AXLink": return "enlace"
-        case "AXTextField", "AXTextArea", "AXSecureTextField": return "campo de texto"
-        case "AXSearchField": return "campo de búsqueda"
+        case "AXTextField", "AXTextArea", "AXSecureTextField": return tr("campo de texto")
+        case "AXSearchField": return tr("campo de búsqueda")
         case "AXImage": return "imagen"
         case "AXSwitch", "AXCheckBox": return "interruptor"
         case "AXSlider", "AXIncrementor": return "ajustable"
-        case "AXRadioButton": return "pestaña"
+        case "AXRadioButton": return tr("pestaña")
         default: return ""
         }
     }
@@ -157,19 +157,19 @@ struct AXSetting: Identifiable {
     private static func cache(_ suffix: String) -> String { "com.apple.accessibility.cache.\(suffix)" }
 
     static let all = [
-        AXSetting(name: "Texto en negrita", key: "EnhancedTextLegibilityEnabled",
+        AXSetting(name: tr("Texto en negrita"), key: "EnhancedTextLegibilityEnabled",
                   notifications: [cache("enhance.text.legibility")]),
-        AXSetting(name: "Reducir transparencia", key: "EnhancedBackgroundContrastEnabled",
+        AXSetting(name: tr("Reducir transparencia"), key: "EnhancedBackgroundContrastEnabled",
                   notifications: [cache("enhance.background.contrast")]),
-        AXSetting(name: "Reducir movimiento", key: "ReduceMotionEnabled",
+        AXSetting(name: tr("Reducir movimiento"), key: "ReduceMotionEnabled",
                   notifications: [cache("reduce.motion"), "com.apple.accessibility.reduce.motion.status"]),
-        AXSetting(name: "Invertir colores", key: "InvertColorsEnabled",
+        AXSetting(name: tr("Invertir colores"), key: "InvertColorsEnabled",
                   notifications: [cache("invert.colors")]),
-        AXSetting(name: "Formas de botón", key: "ButtonShapesEnabled",
+        AXSetting(name: tr("Formas de botón"), key: "ButtonShapesEnabled",
                   notifications: [cache("button.shapes.enabled"), "com.apple.accessibility.button.shapes"]),
-        AXSetting(name: "Etiquetas de encendido y apagado", key: "IncreaseButtonLegibilityEnabled",
+        AXSetting(name: tr("Etiquetas de encendido y apagado"), key: "IncreaseButtonLegibilityEnabled",
                   notifications: [cache("increase.button.legibility"), "com.apple.accessibility.increase.button.legibility"]),
-        AXSetting(name: "Diferenciar sin color", key: "DifferentiateWithoutColor",
+        AXSetting(name: tr("Diferenciar sin color"), key: "DifferentiateWithoutColor",
                   notifications: [cache("differentiate.without.color"), "com.apple.accessibility.differentiate.without.color.status"]),
     ]
 }
@@ -416,7 +416,7 @@ final class InspectorModel: ObservableObject {
     func activate() {
         guard let node = nodes.first(where: { $0.id == focus }) else { return }
         let result = AXUIElementPerformAction(node.element, kAXPressAction as CFString)
-        panel.say(result == .success ? "Activado: \(node.title)" : "Este elemento no se puede activar")
+        panel.say(result == .success ? tr("Activado: %@", "\(node.title)") : tr("Este elemento no se puede activar"))
         // The app navigates: read the new screen once it has settled.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { self.reload() }
     }
@@ -472,7 +472,7 @@ final class InspectorModel: ObservableObject {
             }
             for (_, group) in Dictionary(grouping: stops.filter { $0.interactive && !$0.label.isEmpty }, by: { "\($0.role)|\($0.label)" })
                 where group.count > 1 {
-                for node in group { findings.append(AXFinding(rule: .duplicateLabel, node: node, detail: "\(group.count) veces")) }
+                for node in group { findings.append(AXFinding(rule: .duplicateLabel, node: node, detail: tr("%@ veces", "\(group.count)"))) }
             }
             for (_, group) in Dictionary(grouping: nodes.filter { !$0.identifier.isEmpty }, by: \.identifier) where group.count > 1 {
                 for node in group { findings.append(AXFinding(rule: .duplicateIdentifier, node: node, detail: node.identifier)) }
@@ -488,7 +488,7 @@ final class InspectorModel: ObservableObject {
                     let needed = node.role == "AXHeading" || node.frame.height * scale >= 24 ? 3.0 : 4.5
                     if ratio < needed {
                         findings.append(AXFinding(rule: .lowContrast, node: node,
-                                                  detail: String(format: "%.1f:1, se pide %.1f:1", ratio, needed)))
+                                                  detail: String(format: tr("%.1f:1, se pide %.1f:1"), ratio, needed)))
                     }
                 }
             }
@@ -549,9 +549,9 @@ struct AccessibilityForm: View {
     }
 
     var body: some View {
-        FormBox(title: "Accesibilidad", device: model.device?.name, width: 460, symbol: "accessibility") {
+        FormBox(title: tr("Accesibilidad"), device: model.device?.name, width: 460, symbol: "accessibility") {
             Picker("Sección", selection: $inspector.tab) {
-                ForEach(InspectorModel.Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(InspectorModel.Tab.allCases, id: \.self) { Text(tr($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -559,7 +559,7 @@ struct AccessibilityForm: View {
                 settings
             } else if let problem = inspector.problem {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(problem).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(tr(problem)).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     if !SimulatorAX.trusted {
                         Button("Permitir Accesibilidad") { SimulatorAX.requestAccess() }
                     }
@@ -590,7 +590,7 @@ struct AccessibilityForm: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Picker("Rotor", selection: $inspector.rotor) {
-                    ForEach(InspectorModel.Rotor.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    ForEach(InspectorModel.Rotor.allCases, id: \.self) { Text(tr($0.rawValue)).tag($0) }
                 }
                 .frame(width: 190)
                 Spacer()
@@ -609,9 +609,9 @@ struct AccessibilityForm: View {
                                 Text("\(index + 1)").font(.caption.monospacedDigit().weight(.semibold))
                                     .frame(width: 22, alignment: .trailing).foregroundStyle(.secondary)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(node.spoken).lineLimit(2)
+                                    Text(tr(node.spoken)).lineLimit(2)
                                     if !node.identifier.isEmpty {
-                                        Text(node.identifier).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                                        Text(tr(node.identifier)).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                                     }
                                 }
                                 Spacer(minLength: 0)
@@ -631,7 +631,7 @@ struct AccessibilityForm: View {
             HStack(spacing: 8) {
                 Button { inspector.move(-1) } label: { Image(systemName: "chevron.up") }.help("Elemento anterior (↑)")
                 Button { inspector.move(1) } label: { Image(systemName: "chevron.down") }.help("Elemento siguiente (↓)")
-                Text("\(stops.count) elementos").font(.callout).foregroundStyle(.secondary)
+                Text(tr("%@ elementos", "\(stops.count)")).font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Button("Activar") { inspector.activate() }
                     .buttonStyle(PrimaryButtonStyle())
@@ -666,9 +666,9 @@ struct AccessibilityForm: View {
                     ForEach(nodes) { node in
                         HStack(spacing: 6) {
                             Image(systemName: node.symbol).font(.caption).frame(width: 16).foregroundStyle(.secondary)
-                            Text(node.title).lineLimit(1)
+                            Text(tr(node.title)).lineLimit(1)
                             if !node.identifier.isEmpty {
-                                Text(node.identifier).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                                Text(tr(node.identifier)).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                             }
                             Spacer(minLength: 0)
                         }
@@ -710,14 +710,14 @@ struct AccessibilityForm: View {
                 }
             }
             field("Tamaño", "\(Int(size.width)) × \(Int(size.height)) pt" + (node.enabled ? "" : " · deshabilitado"))
-            field("VoiceOver", node.isStop ? node.spoken : "no se detiene aquí")
+            field("VoiceOver", node.isStop ? node.spoken : tr("no se detiene aquí"))
         }
     }
 
     private func field(_ name: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(name).font(.callout).foregroundStyle(.secondary).frame(width: 92, alignment: .leading)
-            Text(value).font(.callout).textSelection(.enabled).lineLimit(2).truncationMode(.middle)
+            Text(tr(name)).font(.callout).foregroundStyle(.secondary).frame(width: 92, alignment: .leading)
+            Text(tr(value)).font(.callout).textSelection(.enabled).lineLimit(2).truncationMode(.middle)
             Spacer(minLength: 0)
         }
     }
@@ -731,7 +731,7 @@ struct AccessibilityForm: View {
                     Text("\(inspector.score)").font(.system(size: 30, weight: .semibold).monospacedDigit())
                     VStack(alignment: .leading, spacing: 0) {
                         Text("de 100").font(.callout)
-                        Text(inspector.findings.isEmpty ? "Sin hallazgos" : "\(inspector.findings.count) hallazgos")
+                        Text(inspector.findings.isEmpty ? "Sin hallazgos" : tr("%@ hallazgos", "\(inspector.findings.count)"))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 } else {
@@ -739,7 +739,7 @@ struct AccessibilityForm: View {
                 }
                 Spacer()
                 if inspector.auditing { ProgressView().controlSize(.small) }
-                Button(inspector.audited ? "Auditar de nuevo" : "Auditar pantalla") { inspector.audit() }
+                Button(inspector.audited ? "Auditar de nuevo" : tr("Auditar pantalla")) { inspector.audit() }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(inspector.auditing || inspector.nodes.isEmpty)
             }
@@ -751,14 +751,14 @@ struct AccessibilityForm: View {
                             if !group.isEmpty {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text("\(rule.rawValue) · \(group.count)").font(.headline)
-                                    Text(rule.explanation).font(.caption).foregroundStyle(.secondary)
+                                    Text(tr(rule.explanation)).font(.caption).foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
                                     ForEach(group) { finding in
                                         HStack(spacing: 8) {
                                             Image(systemName: finding.node.symbol).font(.caption).frame(width: 16).foregroundStyle(.secondary)
-                                            Text(finding.node.title).lineLimit(1)
+                                            Text(tr(finding.node.title)).lineLimit(1)
                                             Spacer(minLength: 0)
-                                            Text(finding.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                            Text(tr(finding.detail)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                         }
                                         .padding(.horizontal, 8).padding(.vertical, 4)
                                         .background(finding.id == inspector.highlighted
@@ -791,7 +791,7 @@ struct AccessibilityForm: View {
                     Slider(value: index, in: 0...Double(Simctl.contentSizes.count - 1), step: 1)
                     Image(systemName: "textformat.size.larger")
                 }
-                Text(model.contentSize).font(.caption).foregroundStyle(.secondary)
+                Text(tr(model.contentSize)).font(.caption).foregroundStyle(.secondary)
             }
             Divider()
             Toggle("Aumentar contraste", isOn: Binding(get: { model.increaseContrast }, set: { model.setIncreaseContrast($0) }))

@@ -12,6 +12,10 @@
 </p>
 
 <p align="center">
+  Interfaz en español, inglés, chino simplificado y japonés · sigue el idioma de tu sistema
+</p>
+
+<p align="center">
   macOS 14+ · Xcode · Licencia MIT · Gratis y abierto
 </p>
 
@@ -286,6 +290,9 @@ Saguru prefiere decir lo que no hace. Lo mismo aparece dentro de cada herramient
   funciona; texto, rectángulos y documentos ya funcionaban. Puntos de la cara, personas y clasificación de imágenes
   no tienen versión que funcione en el simulador y siguen fallando. La API nueva de Vision en Swift (iOS 18) no se
   ha probado.
+- Idiomas: la interfaz está escrita en español y traducida a inglés, chino simplificado y japonés (menú `…` ›
+  Idioma). Las traducciones no las ha revisado un hablante nativo. Los mensajes del CLI y lo que escribe el agente
+  en el registro de la app siguen en español o inglés. Un texto sin traducción se muestra en español.
 - Fuera de alcance por ahora: captura de pantalla o video (ya lo hace el Simulador).
 
 

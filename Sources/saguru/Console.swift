@@ -115,7 +115,7 @@ final class ConsoleModel: ObservableObject {
         self.udid = udid
         appName = name
         launchedAt = Date()
-        add("\(name) lanzada por Saguru · proceso \(pid)\(plain ? " · app intacta, sin nada de Saguru dentro" : "")", .note)
+        add(tr("%@ lanzada por Saguru · proceso %@%@", "\(name)", "\(pid)", "\(plain ? " · app intacta, sin nada de Saguru dentro" : "")"), .note)
         let process = Simctl.process(["spawn", udid, "log", "stream", "--style", "compact", "--level", "info", "--predicate", "processIdentifier == \(pid)"])
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -147,10 +147,10 @@ final class ConsoleModel: ObservableObject {
             guard !announced else { return }
             announced = true
             let why = report.reason.split(separator: "\n").first.map(String.init) ?? report.title
-            add("\(name) se cerró: \(report.title)", .fault)
-            panel.say("\(name) se cerró: \(why.prefix(110)). Míralo en Registro")
+            add(tr("%@ se cerró: %@", "\(name)", "\(report.title)"), .fault)
+            panel.say(tr("%@ se cerró: %@. Míralo en Registro", "\(name)", "\(why.prefix(110))"))
         }
-        if !said.isEmpty { show(CrashReport(title: "Error fatal", reason: said, frames: [], file: nil)) }
+        if !said.isEmpty { show(CrashReport(title: tr("Error fatal"), reason: said, frames: [], file: nil)) }
 
         waiting = true
         DispatchQueue.global(qos: .userInitiated).async {
@@ -165,7 +165,7 @@ final class ConsoleModel: ObservableObject {
                     DispatchQueue.main.async {
                         guard self.session == mine, self.crash == nil, let status else { return }
                         if status.failure { show(CrashReport(title: status.title, reason: status.reason, frames: [], file: nil)) }
-                        else { self.add("\(name) terminó: \(status.reason)", .note) ; announced = true }
+                        else { self.add(tr("%@ terminó: %@", "\(name)", "\(status.reason)"), .note) ; announced = true }
                     }
                 }
                 Thread.sleep(forTimeInterval: 1.3)
@@ -182,7 +182,7 @@ final class ConsoleModel: ObservableObject {
                     if !said.isEmpty { report.reason = said + (report.reason.isEmpty ? "" : "\n" + report.reason) }
                     show(report)
                 } else if self.crash == nil, !announced {
-                    self.add("\(name) terminó sin que el sistema dejara un motivo", .note)
+                    self.add(tr("%@ terminó sin que el sistema dejara un motivo", "\(name)"), .note)
                 }
             }
         }
@@ -208,13 +208,13 @@ final class ConsoleModel: ObservableObject {
         case "SIGKILL":
             return "El sistema o una herramienta la mató sin darle ocasión de responder."
         default:
-            return "El proceso recibió la señal \(signal)."
+            return tr("El proceso recibió la señal %@.", "\(signal)")
         }
     }
 
     /// How SpringBoard recorded the end of the process: "domain:signal(2) code:SIGABRT(6)", "domain:tcc(11) code:0"…
     static func exitStatus(pid: Int32, udid: String) -> (title: String, reason: String, failure: Bool)? {
-        let predicate = "process == \"SpringBoard\" AND subsystem == \"com.apple.FrontBoard\" AND eventMessage CONTAINS \"Process exited\" AND eventMessage CONTAINS \":\(pid)]\""
+        let predicate = tr("process == \"SpringBoard\" AND subsystem == \"com.apple.FrontBoard\" AND eventMessage CONTAINS \"Process exited\" AND eventMessage CONTAINS \":%@]\"", "\(pid)")
         guard let data = try? Simctl.run(["spawn", udid, "log", "show", "--last", "40s", "--style", "compact", "--predicate", predicate]),
               let line = String(data: data, encoding: .utf8)?.split(separator: "\n").last(where: { $0.contains("domain:") }) else { return nil }
         func field(_ name: String) -> String {
@@ -226,10 +226,10 @@ final class ConsoleModel: ObservableObject {
         switch kind {
         case "tcc": return ("Permiso cambiado", "el sistema la cerró porque cambió un permiso de privacidad (es lo normal al conceder o quitar uno)", false)
         case "frontboard", "springboard": return ("Cierre pedido", "la cerró el usuario, Saguru u otra herramienta", false)
-        case "jetsam": return ("Sin memoria", "El sistema la cerró por usar demasiada memoria (\(what)).", true)
-        case "watchdog", "runningboard": return ("Cerrada por el sistema", "El sistema la cerró: tardó demasiado en responder o incumplió una regla (\(domain) \(code)).", true)
-        case "signal": return ("Señal \(what)", meaning(of: what), !["SIGKILL", "SIGTERM"].contains(what))
-        default: return ("Terminó", "salió con \(domain) \(code)", false)
+        case "jetsam": return ("Sin memoria", tr("El sistema la cerró por usar demasiada memoria (%@).", "\(what)"), true)
+        case "watchdog", "runningboard": return ("Cerrada por el sistema", tr("El sistema la cerró: tardó demasiado en responder o incumplió una regla (%@ %@).", "\(domain)", "\(code)"), true)
+        case "signal": return (tr("Señal %@", "\(what)"), meaning(of: what), !["SIGKILL", "SIGTERM"].contains(what))
+        default: return ("Terminó", tr("salió con %@ %@", "\(domain)", "\(code)"), false)
         }
     }
 
@@ -309,7 +309,7 @@ final class ConsoleModel: ObservableObject {
         let frames = raw.prefix(40).enumerated().map { index, frame -> CrashReport.Frame in
             let image = (frame["imageIndex"] as? Int).flatMap { $0 < images.count ? images[$0]["name"] as? String : nil } ?? "?"
             let place = (frame["sourceFile"] as? String).map { "\($0):\(frame["sourceLine"] as? Int ?? 0)" } ?? ""
-            return CrashReport.Frame(id: index, image: image, symbol: (frame["symbol"] as? String) ?? "(sin símbolo)", place: place,
+            return CrashReport.Frame(id: index, image: image, symbol: (frame["symbol"] as? String) ?? tr("(sin símbolo)"), place: place,
                                      own: image == name || image.hasPrefix(name + "."))
         }
         return (Int32(pid), CrashReport(title: title, reason: reasons.joined(separator: "\n"), frames: frames, file: file))
@@ -331,7 +331,7 @@ struct ConsoleView: View {
     }
 
     var body: some View {
-        FormBox(title: "Registro", target: panel) {
+        FormBox(title: tr("Registro"), target: panel) {
             VStack(alignment: .leading, spacing: 12) {
                 if let crash = console.crash { card(crash) }
                 HStack(spacing: 8) {
@@ -343,7 +343,7 @@ struct ConsoleView: View {
                     Button("Limpiar") { console.clear() }.disabled(console.lines.isEmpty)
                     Toggle("App intacta", isOn: $panel.plainLaunch).toggleStyle(.checkbox)
                         .help("Lanza la app sin nada de Saguru dentro (sin cámara ni red), para descartar que un cierre venga de Saguru")
-                    Button(panel.agentAlive ? "Relanzar" : "Lanzar con registro") { launch() }.disabled(panel.app == nil)
+                    Button(panel.agentAlive ? "Relanzar" : tr("Lanzar con registro")) { launch() }.disabled(panel.app == nil)
                 }
                 .controlSize(.small)
                 .padding(.horizontal, 10).padding(.vertical, 7)
@@ -368,10 +368,10 @@ struct ConsoleView: View {
         if console.lines.isEmpty {
             VStack(spacing: 10) {
                 Image(systemName: "terminal").font(.system(size: 30, weight: .light))
-                Text(panel.agentAlive ? "La app aún no ha escrito nada" : "Lanza la app desde aquí para ver lo que escribe\ny, si se cierra, por qué")
+                Text(panel.agentAlive ? "La app aún no ha escrito nada" : tr("Lanza la app desde aquí para ver lo que escribe\ny, si se cierra, por qué"))
                     .multilineTextAlignment(.center)
                 if !panel.agentAlive {
-                    Button("Lanzar \(panel.app?.name ?? "la app") con registro") { launch() }
+                    Button(tr("Lanzar %@ con registro", "\(panel.app?.name ?? "la app")")) { launch() }
                         .buttonStyle(PrimaryButtonStyle()).disabled(panel.app == nil)
                 }
             }
@@ -391,15 +391,15 @@ struct ConsoleView: View {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "exclamationmark.octagon.fill").foregroundStyle(Color(nsColor: .systemRed))
-                Text("\(console.appName) se cerró").font(.headline)
-                Text(crash.title).font(.callout.monospaced()).foregroundStyle(.secondary)
+                Text(tr("%@ se cerró", "\(console.appName)")).font(.headline)
+                Text(tr(crash.title)).font(.callout.monospaced()).foregroundStyle(.secondary)
                 Spacer()
                 Button("Copiar") { copy(crash.text) }
                 if let file = crash.file { Button("Ver informe") { NSWorkspace.shared.open(file) } }
             }
             .controlSize(.small)
             if !crash.reason.isEmpty {
-                Text(crash.reason).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                Text(tr(crash.reason)).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !frames.isEmpty {
@@ -410,14 +410,14 @@ struct ConsoleView: View {
                             Text(frame.symbol + (frame.place.isEmpty ? "" : "  · \(frame.place)")).foregroundStyle(frame.own ? .primary : .secondary)
                                 .lineLimit(1).truncationMode(.middle)
                             Spacer(minLength: 0)
-                            Text(frame.image).foregroundStyle(.tertiary).lineLimit(1)
+                            Text(tr(frame.image)).foregroundStyle(.tertiary).lineLimit(1)
                         }
                         .font(.system(size: 11, design: .monospaced))
                     }
                 }
                 // A long stack scrolls inside the card; a short one takes only the room it needs.
                 if wholeStack && frames.count > 12 { ScrollView { list }.frame(height: 200) } else { list }
-                Button(wholeStack ? "Solo el código de la app" : "Ver la pila completa") { wholeStack.toggle() }
+                Button(wholeStack ? "Solo el código de la app" : tr("Ver la pila completa")) { wholeStack.toggle() }
                     .buttonStyle(.borderless).controlSize(.small)
             } else if console.waiting {
                 HStack(spacing: 8) {

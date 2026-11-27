@@ -70,7 +70,7 @@ final class PanelModel: ObservableObject {
     /// "SajaruBox en iPhone 17": where an app-specific action is about to land.
     var target: String {
         guard let device else { return "Ningún simulador arrancado" }
-        return app.map { "\($0.name) en \(device.name)" } ?? "Elige una app · \(device.name)"
+        return app.map { tr("%@ en %@", "\($0.name)", "\(device.name)") } ?? tr("Elige una app · %@", "\(device.name)")
     }
 
     func chooseApp(_ bundleID: String) {
@@ -223,7 +223,7 @@ final class PanelModel: ObservableObject {
         appearance = value
         // While comparing, the watcher sees the screen change and retakes the picture by itself.
         splitQueue.async { self.liveAppearance = value }
-        perform(value == "dark" ? "Apariencia oscura" : "Apariencia clara") { try Simctl.setAppearance($0.udid, value) }
+        perform(value == "dark" ? "Apariencia oscura" : tr("Apariencia clara")) { try Simctl.setAppearance($0.udid, value) }
     }
 
     /// The live side, held still while the simulator is briefly in the other appearance, so that the
@@ -312,7 +312,7 @@ final class PanelModel: ObservableObject {
             try Simctl.setAppearance(udid, current)
             Thread.sleep(forTimeInterval: 0.35)
             picture = NSImage(data: shot)
-            names = (other == "dark" ? "Oscuro" : "Claro", current == "dark" ? "Oscuro" : "Claro")
+            names = (other == "dark" ? "Oscuro" : tr("Claro"), current == "dark" ? "Oscuro" : tr("Claro"))
         } catch {
             failure = "\(error)"
         }
@@ -331,7 +331,7 @@ final class PanelModel: ObservableObject {
                 self.splitLabels = names
                 self.split = .appearance
             } else {
-                self.say(failure ?? "No se pudo capturar la pantalla")
+                self.say(failure ?? tr("No se pudo capturar la pantalla"))
             }
         }
     }
@@ -407,7 +407,7 @@ final class PanelModel: ObservableObject {
     // MARK: Feedback
 
     func say(_ message: String) {
-        status = message
+        status = tr(message)
         statusToken += 1
         let token = statusToken
         // Long messages (warnings) stay long enough to be read.
@@ -443,7 +443,7 @@ final class PanelModel: ObservableObject {
             do {
                 let permission = try Simctl.push(device.udid, bundleID: bundleID, payload: payload)
                 // Sent, but iOS drops it without notification permission: say so instead of "sent".
-                message = permission.warning.map { "No se verá: \($0)" } ?? "Notificación enviada a \(device.name)"
+                message = permission.warning.map { tr("No se verá: %@", "\($0)") } ?? tr("Notificación enviada a %@", "\(device.name)")
             } catch {
                 message = "\(error)"
             }
@@ -453,7 +453,7 @@ final class PanelModel: ObservableObject {
 
     func addMedia(_ files: [URL]) {
         guard !files.isEmpty else { return }
-        perform(files.count == 1 ? "1 archivo añadido a Fotos" : "\(files.count) archivos añadidos a Fotos") { device in
+        perform(files.count == 1 ? "1 archivo añadido a Fotos" : tr("%@ archivos añadidos a Fotos", "\(files.count)")) { device in
             try Simctl.addMedia(device.udid, files: files)
         }
     }
@@ -466,7 +466,7 @@ final class PanelModel: ObservableObject {
     private(set) lazy var gallery = GalleryModel(panel: self)
 
     func pickMedia() {
-        pickFiles(types: [.image, .movie], multiple: true, prompt: "Añadir a Fotos") { self.addMedia($0) }
+        pickFiles(types: [.image, .movie], multiple: true, prompt: tr("Añadir a Fotos")) { self.addMedia($0) }
     }
 
     private func pickFiles(types: [UTType], multiple: Bool, prompt: String, done: @escaping ([URL]) -> Void) {
@@ -625,7 +625,7 @@ final class PanelModel: ObservableObject {
         work.async {
             do {
                 try on ? Simctl.overrideStatusBar(device.udid, bar) : Simctl.resetStatusBar(device.udid)
-                if announce { DispatchQueue.main.async { self.say(on ? "Barra de estado personalizada" : "Barra de estado restaurada") } }
+                if announce { DispatchQueue.main.async { self.say(on ? "Barra de estado personalizada" : tr("Barra de estado restaurada")) } }
             } catch {
                 DispatchQueue.main.async { self.say("\(error)") }
             }
@@ -640,8 +640,8 @@ final class PanelModel: ObservableObject {
         slowAnimations = on
         SlowAnimations.set(on) { worked in
             self.slowAnimations = SlowAnimations.isOn
-            self.say(worked ? (on ? "Animaciones lentas" : "Animaciones a velocidad normal")
-                            : "No se pudo cambiar: la ventana del Simulador tiene que estar a la vista")
+            self.say(worked ? (on ? "Animaciones lentas" : tr("Animaciones a velocidad normal"))
+                            : tr("No se pudo cambiar: la ventana del Simulador tiene que estar a la vista"))
         }
     }
 
@@ -674,7 +674,7 @@ final class PanelModel: ObservableObject {
 
     func setIncreaseContrast(_ on: Bool) {
         increaseContrast = on
-        perform(on ? "Contraste aumentado" : "Contraste normal") { try Simctl.setIncreaseContrast($0.udid, on) }
+        perform(on ? "Contraste aumentado" : tr("Contraste normal")) { try Simctl.setIncreaseContrast($0.udid, on) }
     }
 
     // MARK: App data
@@ -694,11 +694,11 @@ final class PanelModel: ObservableObject {
                 arguments += ["-AppleLanguages", "(\(language))", "-AppleLocale", region.isEmpty ? language : "\(language)_\(region)"]
             }
             launchWithAgent(arguments: arguments) { failure in
-                self.say(failure ?? (language.isEmpty ? "App reiniciada" : "App reiniciada en «\(language)»"))
+                self.say(failure ?? (language.isEmpty ? "App reiniciada" : tr("App reiniciada en «%@»", "\(language)")))
             }
             return
         }
-        perform(language.isEmpty ? "App reiniciada" : "App reiniciada en «\(language)»") { device in
+        perform(language.isEmpty ? "App reiniciada" : tr("App reiniciada en «%@»", "\(language)")) { device in
             try Simctl.relaunch(device.udid, bundleID: bundleID, language: language, region: region)
         }
     }
@@ -706,10 +706,10 @@ final class PanelModel: ObservableObject {
     func eraseData(bundleID: String) {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "¿Borrar los datos de \(apps.first { $0.bundleID == bundleID }?.name ?? bundleID)?"
+        alert.messageText = tr("¿Borrar los datos de %@?", "\(apps.first { $0.bundleID == bundleID }?.name ?? bundleID)")
         alert.informativeText = "Se vacían Documents, Library y tmp de la app en este simulador. No se puede deshacer."
-        alert.addButton(withTitle: "Borrar datos").hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancelar")
+        alert.addButton(withTitle: tr("Borrar datos")).hasDestructiveAction = true
+        alert.addButton(withTitle: tr("Cancelar"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         perform("Datos borrados", then: { self.loadDefaults(bundleID: bundleID) }) { device in
             try Simctl.eraseData(device.udid, bundleID: bundleID)
@@ -729,9 +729,9 @@ final class PanelModel: ObservableObject {
                 case let string as String:
                     return DefaultsEntry(key: key, kind: .string, text: string)
                 case let array as [Any]:
-                    return DefaultsEntry(key: key, kind: .other, text: "Lista (\(array.count))")
+                    return DefaultsEntry(key: key, kind: .other, text: tr("Lista (%@)", "\(array.count)"))
                 case let dictionary as [String: Any]:
-                    return DefaultsEntry(key: key, kind: .other, text: "Diccionario (\(dictionary.count))")
+                    return DefaultsEntry(key: key, kind: .other, text: tr("Diccionario (%@)", "\(dictionary.count)"))
                 default:
                     return DefaultsEntry(key: key, kind: .other, text: "\(value)")
                 }
@@ -773,7 +773,7 @@ final class PanelModel: ObservableObject {
         guard measuring || requireAccessibility() else { return }
         measuring.toggle()
         if !measuring { cursor = nil; guides = [] }
-        say(measuring ? "⌥ fija una guía · pulsa Reglas otra vez para salir" : "Reglas desactivadas")
+        say(measuring ? "⌥ fija una guía · pulsa Reglas otra vez para salir" : tr("Reglas desactivadas"))
     }
 
     func pickColor() {
@@ -785,7 +785,7 @@ final class PanelModel: ObservableObject {
                                rgb.redComponent, rgb.greenComponent, rgb.blueComponent, hex)
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(swift, forType: .string)
-            self.say("\(hex) copiado como Color de SwiftUI")
+            self.say(tr("%@ copiado como Color de SwiftUI", "\(hex)"))
         }
     }
 }

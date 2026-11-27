@@ -66,7 +66,7 @@ struct NetEntry: Identifiable, Equatable {
         if case .text(let text, _) = BodyContent.read(data, mime: request ? "" : mime) {
             lines.append(text)
         } else {
-            lines.append("(\(NetFormat.size(data.count)) de contenido binario)")
+            lines.append(tr("(%@ de contenido binario)", "\(NetFormat.size(data.count))"))
         }
         return lines.joined(separator: "\n")
     }
@@ -328,7 +328,7 @@ final class NetworkModel: ObservableObject {
         saveMocks()
         mockSelection = mock.id
         showingMocks = true
-        panel.say("Mock creado: \(entry.method) \(entry.path)")
+        panel.say(tr("Mock creado: %@ %@", "\(entry.method)", "\(entry.path)"))
     }
 
     func update(_ mock: NetMock) {
@@ -432,16 +432,16 @@ final class NetworkWindow: NSObject, NSWindowDelegate {
         let main = NSMenu()
         let appItem = NSMenuItem()
         appItem.submenu = NSMenu()
-        appItem.submenu?.addItem(withTitle: "Salir de Saguru", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu?.addItem(withTitle: tr("Salir de Saguru"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         main.addItem(appItem)
         let editItem = NSMenuItem()
-        let edit = NSMenu(title: "Edición")
-        edit.addItem(withTitle: "Deshacer", action: Selector(("undo:")), keyEquivalent: "z")
-        edit.addItem(withTitle: "Rehacer", action: Selector(("redo:")), keyEquivalent: "Z")
-        edit.addItem(withTitle: "Cortar", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        edit.addItem(withTitle: "Copiar", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "Pegar", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        edit.addItem(withTitle: "Seleccionar todo", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let edit = NSMenu(title: tr("Edición"))
+        edit.addItem(withTitle: tr("Deshacer"), action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: tr("Rehacer"), action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(withTitle: tr("Cortar"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: tr("Copiar"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: tr("Pegar"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: tr("Seleccionar todo"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = edit
         main.addItem(editItem)
         NSApp.mainMenu = main
@@ -498,17 +498,17 @@ struct NetworkView: View {
         HStack(spacing: 12) {
             AppBadge(app: panel.app, size: 30)
             VStack(alignment: .leading, spacing: 1) {
-                Text(panel.app?.name ?? "Elige una app en el riel").font(.headline)
+                Text(panel.app?.name ?? tr("Elige una app en el riel")).font(.headline)
                 HStack(spacing: 5) {
                     Circle().fill(model.isWatching ? Color(nsColor: .systemGreen) : Color.secondary.opacity(0.6)).frame(width: 7, height: 7)
-                    Text(model.isWatching ? "Capturando · \(model.entries.count) peticiones" : "Sin capturar")
+                    Text(model.isWatching ? tr("Capturando · %@ peticiones", "\(model.entries.count)") : tr("Sin capturar"))
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
             Spacer()
             Picker("", selection: $model.showingMocks) {
                 Text("Peticiones").tag(false)
-                Text(model.mocks.isEmpty ? "Mocks" : "Mocks (\(model.mocks.count))").tag(true)
+                Text(model.mocks.isEmpty ? "Mocks" : tr("Mocks (%@)", "\(model.mocks.count)")).tag(true)
             }
             .pickerStyle(.segmented).labelsHidden().fixedSize()
             Spacer()
@@ -537,12 +537,12 @@ struct NetworkView: View {
             Text("Mira lo que tu app le pide a la red").font(.title2.weight(.semibold))
             Text("Saguru relanza la app y captura cada petición: URL, tiempo, cabeceras, cuerpo y respuesta.\nSin proxy ni certificados. Si la lanzas desde Xcode, vuelve a pulsar Capturar.")
                 .multilineTextAlignment(.center).foregroundStyle(.secondary).lineSpacing(3)
-            Button("Capturar \(panel.app?.name ?? "")") { model.start() }
+            Button(tr("Capturar %@", "\(panel.app?.name ?? "")")) { model.start() }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(panel.app == nil)
                 .padding(.top, 4)
             if let problem = model.problem {
-                Text(problem).font(.callout).foregroundStyle(Color(nsColor: .systemOrange)).multilineTextAlignment(.center)
+                Text(tr(problem)).font(.callout).foregroundStyle(Color(nsColor: .systemOrange)).multilineTextAlignment(.center)
             }
         }
         .padding(40)
@@ -565,7 +565,7 @@ struct NetworkView: View {
             HStack(spacing: 4) {
                 ForEach(NetworkModel.StatusFilter.allCases, id: \.self) { filter in
                     Button { model.statusFilter = filter } label: {
-                        Text(filter.rawValue).font(.callout.weight(.medium))
+                        Text(tr(filter.rawValue)).font(.callout.weight(.medium))
                             .padding(.horizontal, 9).padding(.vertical, 4)
                             .foregroundStyle(model.statusFilter == filter ? Color.white : Color.secondary)
                             .background(model.statusFilter == filter ? Color(nsColor: .systemBlue).opacity(0.85) : raised,
@@ -576,7 +576,7 @@ struct NetworkView: View {
             }
             Spacer()
             if let problem = model.problem {
-                Text(problem).font(.callout).foregroundStyle(Color(nsColor: .systemOrange)).lineLimit(1)
+                Text(tr(problem)).font(.callout).foregroundStyle(Color(nsColor: .systemOrange)).lineLimit(1)
             }
         }
         .padding(.horizontal, 14)
@@ -603,17 +603,17 @@ private struct RequestTable: View {
             }
             .width(min: 70, ideal: 96, max: 130)
             TableColumn("Método") { entry in
-                Text(entry.method).font(.system(.body, design: .monospaced).weight(.semibold))
+                Text(tr(entry.method)).font(.system(.body, design: .monospaced).weight(.semibold))
                     .foregroundStyle(entry.method == "GET" ? Color(nsColor: .systemBlue) : Color(nsColor: .systemOrange))
             }
             .width(min: 50, ideal: 64, max: 80)
-            TableColumn("Servidor") { entry in Text(entry.host).lineLimit(1).foregroundStyle(.secondary) }
+            TableColumn("Servidor") { entry in Text(tr(entry.host)).lineLimit(1).foregroundStyle(.secondary) }
                 .width(min: 80, ideal: 120)
             TableColumn("Ruta") { entry in
                 Text(entry.path + (entry.parts?.query.map { "?\($0)" } ?? "")).lineLimit(1).truncationMode(.middle)
             }
             .width(min: 120, ideal: 170)
-            TableColumn("Tipo") { entry in Text(entry.kind).foregroundStyle(.secondary) }
+            TableColumn("Tipo") { entry in Text(tr(entry.kind)).foregroundStyle(.secondary) }
                 .width(min: 50, ideal: 62, max: 100)
             TableColumn("Tamaño") { entry in
                 Text(entry.finished ? NetFormat.size(entry.responseSize) : "").monospacedDigit().foregroundStyle(.secondary)
@@ -632,7 +632,7 @@ private struct RequestTable: View {
                 Button("Copiar URL") { copy(entry.url) }
                 Button("Copiar como cURL") { copy(model.curl(entry)) }
                 Divider()
-                Button(model.mock(for: entry) == nil ? "Crear mock" : "Editar mock") { model.createMock(from: entry) }
+                Button(model.mock(for: entry) == nil ? "Crear mock" : tr("Editar mock")) { model.createMock(from: entry) }
                     .disabled(!entry.finished)
             }
         }
@@ -654,7 +654,7 @@ private struct EntryDetail: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Text(entry.method).font(.system(.callout, design: .monospaced).weight(.bold))
+                Text(tr(entry.method)).font(.system(.callout, design: .monospaced).weight(.bold))
                     .padding(.horizontal, 7).padding(.vertical, 3)
                     .background(raised, in: RoundedRectangle(cornerRadius: 5))
                 if let status = entry.status {
@@ -664,15 +664,15 @@ private struct EntryDetail: View {
                         .background(NetFormat.color(status: status, error: nil).opacity(0.85), in: RoundedRectangle(cornerRadius: 5))
                 }
                 (Text((entry.parts?.scheme ?? "https") + "://").foregroundStyle(.secondary)
-                    + Text(entry.host).foregroundStyle(Color(nsColor: Highlight.key))
-                    + Text(entry.path).foregroundStyle(.primary)
+                    + Text(tr(entry.host)).foregroundStyle(Color(nsColor: Highlight.key))
+                    + Text(tr(entry.path)).foregroundStyle(.primary)
                     + Text(entry.parts?.percentEncodedQuery.map { "?\($0)" } ?? "").foregroundStyle(Color(nsColor: Highlight.string)))
                     .font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                     .textSelection(.enabled)
                 Spacer(minLength: 8)
-                Text(summary).font(.callout).foregroundStyle(.secondary).fixedSize()
+                Text(tr(summary)).font(.callout).foregroundStyle(.secondary).fixedSize()
                 Button("Copiar cURL") { copy(model.curl(entry)); model.panel.say("cURL copiado") }
-                Button(model.mock(for: entry) == nil ? "Crear mock" : "Editar mock") { model.createMock(from: entry) }
+                Button(model.mock(for: entry) == nil ? "Crear mock" : tr("Editar mock")) { model.createMock(from: entry) }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(!entry.finished)
             }
@@ -680,20 +680,20 @@ private struct EntryDetail: View {
             .padding(.vertical, 9)
             Rectangle().fill(hairline).frame(height: 1)
             HSplitView {
-                side(title: "Petición", tabs: ["Cabeceras", "Query", "Cuerpo", "Raw"], tab: $requestTab) {
+                side(title: tr("Petición"), tabs: ["Cabeceras", "Query", "Cuerpo", "Raw"], tab: $requestTab) {
                     switch requestTab {
                     case "Raw": RawView(entry: entry, request: true)
-                    case "Query": HeaderList(headers: entry.query, empty: "La URL no lleva parámetros")
+                    case "Query": HeaderList(headers: entry.query, empty: tr("La URL no lleva parámetros"))
                     case "Cuerpo": BodyView(file: entry.requestBody, mime: contentType(entry.requestHeaders), size: entry.requestSize,
-                                            empty: "La petición no lleva cuerpo")
-                    default: HeaderList(headers: entry.requestHeaders, empty: "La app no añadió cabeceras")
+                                            empty: tr("La petición no lleva cuerpo"))
+                    default: HeaderList(headers: entry.requestHeaders, empty: tr("La app no añadió cabeceras"))
                     }
                 }
-                side(title: entry.mocked ? "Respuesta · mock" : "Respuesta", tabs: ["Cabeceras", "Cuerpo", "Raw"], tab: $responseTab) {
+                side(title: entry.mocked ? "Respuesta · mock" : tr("Respuesta"), tabs: ["Cabeceras", "Cuerpo", "Raw"], tab: $responseTab) {
                     if let error = entry.error, entry.status == nil {
                         VStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle").font(.title).foregroundStyle(Color(nsColor: .systemRed))
-                            Text(error).multilineTextAlignment(.center).textSelection(.enabled)
+                            Text(tr(error)).multilineTextAlignment(.center).textSelection(.enabled)
                         }
                         .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if !entry.finished {
@@ -701,9 +701,9 @@ private struct EntryDetail: View {
                     } else if responseTab == "Raw" {
                         RawView(entry: entry, request: false)
                     } else if responseTab == "Cabeceras" {
-                        HeaderList(headers: entry.responseHeaders, empty: "Sin cabeceras")
+                        HeaderList(headers: entry.responseHeaders, empty: tr("Sin cabeceras"))
                     } else {
-                        BodyView(file: entry.responseBody, mime: entry.mime, size: entry.responseSize, empty: "La respuesta llegó sin cuerpo")
+                        BodyView(file: entry.responseBody, mime: entry.mime, size: entry.responseSize, empty: tr("La respuesta llegó sin cuerpo"))
                     }
                 }
             }
@@ -722,9 +722,9 @@ private struct EntryDetail: View {
     private func side<Content: View>(title: String, tabs: [String], tab: Binding<String>, @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             HStack {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                Text(tr(title)).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
                 Spacer(minLength: 6)
-                Picker("", selection: tab) { ForEach(tabs, id: \.self) { Text($0).tag($0) } }
+                Picker("", selection: tab) { ForEach(tabs, id: \.self) { Text(tr($0)).tag($0) } }
                     .pickerStyle(.segmented).labelsHidden().controlSize(.small).fixedSize()
             }
             .padding(.horizontal, 14).padding(.vertical, 8)
@@ -740,15 +740,15 @@ private struct HeaderList: View {
 
     var body: some View {
         if headers.isEmpty {
-            Text(empty).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+            Text(tr(empty)).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
                 Grid(alignment: .topLeading, horizontalSpacing: 14, verticalSpacing: 7) {
                     ForEach(headers) { header in
                         GridRow {
-                            Text(header.name).font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary)
+                            Text(tr(header.name)).font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary)
                                 .gridColumnAlignment(.trailing)
-                            Text(header.value).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
+                            Text(tr(header.value)).font(.system(.callout, design: .monospaced)).textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
@@ -836,7 +836,7 @@ private struct BodyView: View {
     var body: some View {
         Group {
             if file == nil {
-                Text(empty).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text(tr(empty)).foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let content {
                 VStack(spacing: 0) {
                     switch content {
@@ -854,7 +854,7 @@ private struct BodyView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Label("Contenido binario: no se puede leer como texto", systemImage: "doc.zipper").foregroundStyle(.secondary)
                             ScrollView([.vertical, .horizontal]) {
-                                Text(preview).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
+                                Text(tr(preview)).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
                             }
                         }
                         .padding(.horizontal, 14).padding(.vertical, 6)
@@ -885,7 +885,7 @@ private struct BodyView: View {
                 guard let data = try? Data(contentsOf: file) else { return nil }
                 return (BodyContent.read(data, mime: mime), data.count)
             }.value
-            content = loaded?.0 ?? .binary(preview: "No se pudo leer el archivo")
+            content = loaded?.0 ?? .binary(preview: tr("No se pudo leer el archivo"))
             stored = loaded?.1 ?? 0
         }
     }
@@ -901,7 +901,7 @@ private struct BodyView: View {
             if json { pieces.append("JSON con formato") }
         case .binary: break
         }
-        if stored < size { pieces.append("guardados los primeros \(NetFormat.size(stored))") }
+        if stored < size { pieces.append(tr("guardados los primeros %@", "\(NetFormat.size(stored))")) }
         return pieces.joined(separator: " · ")
     }
 
@@ -1024,7 +1024,7 @@ private struct MockRow: View {
                 .toggleStyle(.switch).controlSize(.mini).labelsHidden()
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(mock.method).font(.system(.caption, design: .monospaced).weight(.bold))
+                    Text(tr(mock.method)).font(.system(.caption, design: .monospaced).weight(.bold))
                     Text((parts?.path).flatMap { $0.isEmpty ? nil : $0 } ?? "/").lineLimit(1).truncationMode(.middle)
                 }
                 Text(parts?.host ?? mock.url).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -1058,12 +1058,12 @@ private struct MockEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Text(mock.method).font(.system(.callout, design: .monospaced).weight(.bold))
+                Text(tr(mock.method)).font(.system(.callout, design: .monospaced).weight(.bold))
                     .padding(.horizontal, 7).padding(.vertical, 3)
                     .background(raised, in: RoundedRectangle(cornerRadius: 5))
-                Text(mock.url).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                Text(tr(mock.url)).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                     .textSelection(.enabled)
-                    .help("Responde a cualquier \(mock.method) a esta URL, lleve los parámetros que lleve")
+                    .help(tr("Responde a cualquier %@ a esta URL, lleve los parámetros que lleve", "\(mock.method)"))
                 Spacer(minLength: 12)
                 HStack(spacing: 5) {
                     Image(systemName: "clock").foregroundStyle(.secondary)

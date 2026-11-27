@@ -45,7 +45,7 @@ struct RailButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(name)
+        .accessibilityLabel(tr(name))
         .onHover { inside in
             hovering = inside
             if inside { model.hint = name } else if model.hint == name { model.hint = "" }
@@ -99,7 +99,7 @@ struct ContextButton: View {
         .accessibilityLabel("App y simulador")
         .onHover { inside in
             hovering = inside
-            let name = model.app?.name ?? "Elegir app"
+            let name = model.app?.name ?? tr("Elegir app")
             if inside { model.hint = name } else if model.hint == name { model.hint = "" }
         }
     }
@@ -110,7 +110,7 @@ struct RailView: View {
 
     /// Folded, Saguru is one button beside the Simulator. Everything else lives in the panel it unfolds.
     var body: some View {
-        RailButton(model: model, symbol: "chevron.right.2", name: "Abrir Saguru") { model.unfold() }
+        RailButton(model: model, symbol: "chevron.right.2", name: tr("Abrir Saguru")) { model.unfold() }
             .padding(5)
             .modifier(Chrome(radius: 19))
             .overlay {
@@ -152,31 +152,31 @@ struct ToolBar: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            RailButton(model: model, symbol: "chevron.left.2", name: "Plegar") { model.openTool = nil }
+            RailButton(model: model, symbol: "chevron.left.2", name: tr("Plegar")) { model.openTool = nil }
             ContextButton(model: model)
             separator
-            RailPopover(model: model, tool: .push, symbol: "bell.badge", name: "Notificación push") { EmptyView() }
-            RailPopover(model: model, tool: .gallery, symbol: "photo.on.rectangle.angled", name: "Galería") { EmptyView() }
-            RailPopover(model: model, tool: .camera, symbol: "camera", name: "Cámara", active: model.camera.isActive) { EmptyView() }
-            RailPopover(model: model, tool: .url, symbol: "link", name: "Deep links") { EmptyView() }
-            RailPopover(model: model, tool: .location, symbol: "location", name: "Ubicación") { EmptyView() }
-            RailPopover(model: model, tool: .privacy, symbol: "hand.raised", name: "Permisos") { EmptyView() }
+            RailPopover(model: model, tool: .push, symbol: "bell.badge", name: tr("Notificación push")) { EmptyView() }
+            RailPopover(model: model, tool: .gallery, symbol: "photo.on.rectangle.angled", name: tr("Galería")) { EmptyView() }
+            RailPopover(model: model, tool: .camera, symbol: "camera", name: tr("Cámara"), active: model.camera.isActive) { EmptyView() }
+            RailPopover(model: model, tool: .url, symbol: "link", name: tr("Deep links")) { EmptyView() }
+            RailPopover(model: model, tool: .location, symbol: "location", name: tr("Ubicación")) { EmptyView() }
+            RailPopover(model: model, tool: .privacy, symbol: "hand.raised", name: tr("Permisos")) { EmptyView() }
             separator
-            RailPopover(model: model, tool: .appearance, symbol: "circle.lefthalf.filled", name: "Apariencia",
+            RailPopover(model: model, tool: .appearance, symbol: "circle.lefthalf.filled", name: tr("Apariencia"),
                         active: model.split == .appearance) { EmptyView() }
-            RailPopover(model: model, tool: .statusBar, symbol: "antenna.radiowaves.left.and.right", name: "Barra de estado",
+            RailPopover(model: model, tool: .statusBar, symbol: "antenna.radiowaves.left.and.right", name: tr("Barra de estado"),
                         active: model.cleanBar) { EmptyView() }
-            RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: "Accesibilidad") { EmptyView() }
-            RailPopover(model: model, tool: .data, symbol: "externaldrive", name: "Datos de la app") { EmptyView() }
-            RailPopover(model: model, tool: .network, symbol: "network", name: "Red", active: model.networkOpen) { EmptyView() }
-            RailPopover(model: model, tool: .console, symbol: "terminal", name: "Registro", active: model.console.unseen) { EmptyView() }
+            RailPopover(model: model, tool: .accessibility, symbol: "accessibility", name: tr("Accesibilidad")) { EmptyView() }
+            RailPopover(model: model, tool: .data, symbol: "externaldrive", name: tr("Datos de la app")) { EmptyView() }
+            RailPopover(model: model, tool: .network, symbol: "network", name: tr("Red"), active: model.networkOpen) { EmptyView() }
+            RailPopover(model: model, tool: .console, symbol: "terminal", name: tr("Registro"), active: model.console.unseen) { EmptyView() }
             separator
-            RailPopover(model: model, tool: .grid, symbol: "grid", name: "Cuadrícula", active: model.gridOn) { EmptyView() }
-            RailButton(model: model, symbol: "ruler", name: "Reglas", active: model.measuring) { model.toggleMeasuring() }
-            RailPopover(model: model, tool: .colors, symbol: "eyedropper", name: "Colores") { EmptyView() }
+            RailPopover(model: model, tool: .grid, symbol: "grid", name: tr("Cuadrícula"), active: model.gridOn) { EmptyView() }
+            RailButton(model: model, symbol: "ruler", name: tr("Reglas"), active: model.measuring) { model.toggleMeasuring() }
+            RailPopover(model: model, tool: .colors, symbol: "eyedropper", name: tr("Colores")) { EmptyView() }
             Spacer(minLength: 8)
             RailButton(model: model, symbol: model.expanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                       name: model.expanded ? "Reducir el panel" : "Ampliar a pantalla completa", active: model.expanded) { model.expanded.toggle() }
+                       name: model.expanded ? "Reducir el panel" : tr("Ampliar a pantalla completa"), active: model.expanded) { model.expanded.toggle() }
             menu
         }
         .padding(.horizontal, 8)
@@ -200,8 +200,14 @@ struct ToolBar: View {
                 }
             }
             Divider()
-            Button(model.expanded ? "Reducir el panel" : "Ampliar a pantalla completa") { model.expanded.toggle() }
+            Button(model.expanded ? "Reducir el panel" : tr("Ampliar a pantalla completa")) { model.expanded.toggle() }
             Button("Ver la introducción") { model.onboarding = true }
+            // Each language is named in itself; choosing one restarts Saguru, since macOS sets it at launch.
+            Menu("Idioma · Language") {
+                ForEach(Language.allCases, id: \.self) { language in
+                    Button("\(language == Language.chosen ? "✓ " : "")\(language.name)") { Language.choose(language) }
+                }
+            }
             Divider()
             Button("Salir de Saguru") { NSApp.terminate(nil) }
         } label: {
@@ -223,7 +229,7 @@ struct ToastView: View {
     let text: String
 
     var body: some View {
-        Text(text)
+        Text(tr(text))
             .font(.system(size: 11.5, weight: .medium))
             .lineLimit(1)
             .foregroundStyle(.white)

@@ -197,7 +197,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.reloadDevices() }
         }
         cameras += AVCaptureDevice.DiscoverySession(deviceTypes: [.external], mediaType: .muxed, position: .unspecified).devices
-            .map { CameraDevice(id: $0.uniqueID, name: "Pantalla de \($0.localizedName)", isPhone: true, isScreen: true) }
+            .map { CameraDevice(id: $0.uniqueID, name: tr("Pantalla de %@", "\($0.localizedName)"), isPhone: true, isScreen: true) }
         show(cameras + devices.filter { $0.isAndroid || $0.isCable })
         reloadPhones()
     }
@@ -207,7 +207,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
             let phones = ADB.phones().map { phone in
                 CameraDevice(id: phone.serial, name: phone.name, isPhone: true, isAndroid: true,
                              pending: phone.ready ? nil : (phone.state == "offline" ? "Sin conexión: vuelve a conectar el cable"
-                                                                                      : "Acepta «Permitir depuración USB» en el teléfono"))
+                                                                                      : tr("Acepta «Permitir depuración USB» en el teléfono")))
             }
             // iPhones on a cable. Whether the companion app is open is asked of the ones not in use, so the
             // one sending is not disturbed.
@@ -215,8 +215,8 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
             let iphones = USBMux.phones().map { phone -> CameraDevice in
                 let id = "usb:" + phone.serial
                 let open = id == inUse || CableCamera.isListening(serial: phone.serial)
-                return CameraDevice(id: id, name: "iPhone por USB", isPhone: true, isCable: true,
-                                    pending: open ? nil : "Abre la app Saguru Cámara en el iPhone")
+                return CameraDevice(id: id, name: tr("iPhone por USB"), isPhone: true, isCable: true,
+                                    pending: open ? nil : tr("Abre la app Saguru Cámara en el iPhone"))
             }
             DispatchQueue.main.async {
                 self.show(self.devices.filter { !$0.isAndroid && !$0.isCable } + iphones + phones)
@@ -235,17 +235,17 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
                 let was = before.first { $0.id == device.id }
                 if was == nil {
                     fresh.insert(device.id)
-                    panel.say(device.pending == nil ? "Se conectó \(device.name): elígela en Fuente para usarla" : "\(device.name) conectado. \(device.pending!)")
+                    panel.say(device.pending == nil ? tr("Se conectó %@: elígela en Fuente para usarla", "\(device.name)") : tr("%@ conectado. %@", "\(device.name)", "\(device.pending!)"))
                     let id = device.id
                     DispatchQueue.main.asyncAfter(deadline: .now() + 30) { self.fresh.remove(id) }
                 } else if was?.pending != nil, device.pending == nil {
                     fresh.insert(device.id)
-                    panel.say("\(device.name) ya está listo para usarse como cámara")
+                    panel.say(tr("%@ ya está listo para usarse como cámara", "\(device.name)"))
                 }
             }
             for gone in before where !list.contains(where: { $0.id == gone.id }) {
                 fresh.remove(gone.id)
-                if source == .device(gone.id) || source == .android(gone.id) || source == .cable(gone.id) { panel.say("Se desconectó \(gone.name): vuelvo a la imagen") }
+                if source == .device(gone.id) || source == .android(gone.id) || source == .cable(gone.id) { panel.say(tr("Se desconectó %@: vuelvo a la imagen", "\(gone.name)")) }
             }
         }
         switch source {
@@ -294,7 +294,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
             _ = try? Simctl.run(["privacy", udid, "grant", "camera", bundleID])
             DispatchQueue.main.async {
                 self.panel.launchWithAgent { failure in
-                    if let failure { self.problem = failure } else { self.panel.say("Cámara activa en \(self.panel.app?.name ?? bundleID)") }
+                    if let failure { self.problem = failure } else { self.panel.say(tr("Cámara activa en %@", "\(self.panel.app?.name ?? bundleID)")) }
                 }
             }
         }
@@ -368,7 +368,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     func choose(_ device: CameraDevice) {
         problem = nil
         fresh.remove(device.id)
-        if let pending = device.pending { problem = "\(device.name) aún no se puede usar. \(pending)."; return }
+        if let pending = device.pending { problem = tr("%@ aún no se puede usar. %@.", "\(device.name)", "\(pending)"); return }
         if device.isAndroid { source = .android(device.id); return }
         if device.isCable { source = .cable(device.id); return }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -629,7 +629,7 @@ struct CameraForm: View {
     @State private var showLimits = false
 
     var body: some View {
-        FormBox(title: "Cámara", target: model) {
+        FormBox(title: tr("Cámara"), target: model) {
             HStack(alignment: .top, spacing: 20) {
                 VStack(spacing: 10) {
                     strip
@@ -638,11 +638,11 @@ struct CameraForm: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Labeled("Fuente") {
                         VStack(spacing: 4) {
-                            row("Imagen", detail: camera.imageURL?.lastPathComponent ?? "Elige o arrastra una o varias", symbol: "photo", chosen: camera.source == .image) {
+                            row("Imagen", detail: camera.imageURL?.lastPathComponent ?? tr("Elige o arrastra una o varias"), symbol: "photo", chosen: camera.source == .image) {
                                 if camera.imageURL == nil { camera.pickImage() } else { camera.source = .image }
                             }
                             ForEach(camera.devices) { device in
-                                row(device.name, detail: device.pending ?? (device.isScreen ? "Por cable, sin iCloud ni app: abre Cámara en el iPhone" : device.isCable ? "Por cable, con la app Saguru Cámara" : device.isAndroid ? "Android por USB" : (device.isPhone ? "iPhone como cámara" : "Cámara de esta Mac")),
+                                row(device.name, detail: device.pending ?? (device.isScreen ? "Por cable, sin iCloud ni app: abre Cámara en el iPhone" : device.isCable ? "Por cable, con la app Saguru Cámara" : device.isAndroid ? "Android por USB" : (device.isPhone ? "iPhone como cámara" : tr("Cámara de esta Mac"))),
                                     symbol: device.isAndroid ? "smartphone" : (device.isPhone ? "iphone" : "web.camera"),
                                     new: camera.fresh.contains(device.id), waiting: device.pending != nil,
                                     chosen: camera.source == (device.isCable ? .cable(device.id) : device.isAndroid ? .android(device.id) : .device(device.id))) { camera.choose(device) }
@@ -664,27 +664,27 @@ struct CameraForm: View {
                     }
                     Labeled("Encuadre") {
                         Picker("Encuadre", selection: $camera.framing) {
-                            ForEach(CameraModel.Framing.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                            ForEach(CameraModel.Framing.allCases, id: \.self) { Text(tr($0.rawValue)).tag($0) }
                         }
                         .pickerStyle(.segmented).labelsHidden()
                     }
                     Divider()
                     if camera.isActive {
-                        Label("\(model.app?.name ?? "La app") ve esta cámara", systemImage: "checkmark.circle.fill")
+                        Label(tr("%@ ve esta cámara", "\(model.app?.name ?? "La app")"), systemImage: "checkmark.circle.fill")
                             .foregroundStyle(Color(nsColor: .systemGreen))
                         HStack {
                             Button("Relanzar") { camera.activate() }
                             Button("Quitar") { camera.deactivate() }
                         }
                     } else {
-                        Button("Dar la cámara a \(model.app?.name ?? "la app")") { camera.activate() }
+                        Button(tr("Dar la cámara a %@", "\(model.app?.name ?? "la app")")) { camera.activate() }
                             .buttonStyle(PrimaryButtonStyle())
                             .disabled(model.app == nil)
                         Text("Saguru relanza la app. Cambiar de fuente después no requiere relanzar.")
                             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     if let problem = camera.problem {
-                        Label(problem, systemImage: "exclamationmark.triangle").font(.callout)
+                        Label(tr(problem), systemImage: "exclamationmark.triangle").font(.callout)
                             .foregroundStyle(Color(nsColor: .systemOrange)).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
@@ -718,7 +718,7 @@ struct CameraForm: View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
             Image(systemName: good ? "checkmark" : "xmark").font(.caption.weight(.bold))
                 .foregroundStyle(good ? Color(nsColor: .systemGreen) : Color(nsColor: .systemRed)).frame(width: 12)
-            Text(text).font(.caption).foregroundStyle(good ? .primary : .secondary).fixedSize(horizontal: false, vertical: true)
+            Text(tr(text)).font(.caption).foregroundStyle(good ? .primary : .secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -819,7 +819,7 @@ struct CameraForm: View {
             .onTapGesture(count: 2) { camera.roll = 0; camera.yaw = 0; camera.pitch = 0 }
             .help("Anillo azul: girar · dentro: inclinar · centro: mover · doble clic: enderezar")
             .accessibilityElement().accessibilityLabel("Giroscopio")
-            .accessibilityValue(String(format: "giro %.0f, inclinación %.0f y %.0f grados", camera.roll, camera.yaw, camera.pitch))
+            .accessibilityValue(String(format: tr("giro %.0f, inclinación %.0f y %.0f grados"), camera.roll, camera.yaw, camera.pitch))
             .accessibilityAdjustableAction { camera.roll = max(-180, min(180, camera.roll + ($0 == .increment ? 15 : -15))) }
         }
     }
@@ -850,7 +850,7 @@ struct CameraForm: View {
 
     private func pill(_ symbol: String, _ name: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).frame(width: 26, height: 24).contentShape(Rectangle()) }
-            .buttonStyle(.plain).help(name).accessibilityLabel(name)
+            .buttonStyle(.plain).help(tr(name)).accessibilityLabel(tr(name))
     }
 
     /// The pictures at hand. Clicking one sends it at once; ⌘1 to ⌘9 do the same from the keyboard.
@@ -877,7 +877,7 @@ struct CameraForm: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Imagen \(url.lastPathComponent)")
+                    .accessibilityLabel(tr("Imagen %@", "\(url.lastPathComponent)"))
                     .help(index < 9 ? "\(url.lastPathComponent) · ⌘\(index + 1)" : url.lastPathComponent)
                     .contextMenu {
                         Button("Quitar de la lista") { camera.removeImage(url) }
@@ -971,8 +971,8 @@ struct CameraForm: View {
             HStack(spacing: 10) {
                 Image(systemName: symbol).font(.system(size: 15)).frame(width: 22)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(name).lineLimit(1)
-                    Text(detail).font(.caption).foregroundStyle(waiting ? AnyShapeStyle(Color(nsColor: .systemOrange)) : AnyShapeStyle(.secondary))
+                    Text(tr(name)).lineLimit(1)
+                    Text(tr(detail)).font(.caption).foregroundStyle(waiting ? AnyShapeStyle(Color(nsColor: .systemOrange)) : AnyShapeStyle(.secondary))
                         .lineLimit(waiting ? 2 : 1).truncationMode(.middle).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)

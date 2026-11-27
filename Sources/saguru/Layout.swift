@@ -191,7 +191,7 @@ final class GridModel: ObservableObject {
                 for container in containers {
                     let inside = nodes.values.filter { !$0.isContainer && container.rect.insetBy(dx: -1.5, dy: -1.5).contains($0.rect) }
                         .sorted { ($0.rect.minY, $0.rect.minX) < ($1.rect.minY, $1.rect.minX) }
-                    nodes[container.id]?.title = inside.first.map { "Contenedor · \($0.title)" } ?? "Contenedor"
+                    nodes[container.id]?.title = inside.first.map { tr("Contenedor · %@", "\($0.title)") } ?? tr("Contenedor")
                 }
             }
             DispatchQueue.main.async {
@@ -323,7 +323,7 @@ struct GridForm: View {
 
     var body: some View {
         let off = grid.items.filter { !$0.aligned }.count
-        FormBox(title: "Cuadrícula", device: model.device?.name, width: 460, symbol: "grid") {
+        FormBox(title: tr("Cuadrícula"), device: model.device?.name, width: 460, symbol: "grid") {
             Toggle("Mostrar la cuadrícula", isOn: Binding(get: { model.gridOn }, set: { _ in model.toggleGrid() }))
             VStack(alignment: .leading, spacing: 14) {
                 Labeled("Paso de la rejilla") {
@@ -349,7 +349,7 @@ struct GridForm: View {
                 }
                 Divider()
                 if let problem = grid.problem {
-                    Text(problem).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(tr(problem)).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 } else {
                     // Where we are: the screen, or the container we went into.
                     HStack(spacing: 6) {
@@ -380,7 +380,7 @@ struct GridForm: View {
                                     Image(systemName: item.isContainer ? "rectangle" : "textformat")
                                         .font(.caption).frame(width: 16).foregroundStyle(.secondary)
                                     VStack(alignment: .leading, spacing: 1) {
-                                        Text(item.title).lineLimit(1)
+                                        Text(tr(item.title)).lineLimit(1)
                                         Text(item.aligned ? "\(GridModel.number(item.rect.width)) × \(GridModel.number(item.rect.height))"
                                                           : item.offsets.joined(separator: " · "))
                                             .font(.caption.monospacedDigit())
@@ -568,7 +568,7 @@ struct ColorsForm: View {
     }
 
     var body: some View {
-        FormBox(title: "Colores", width: 440, target: model) {
+        FormBox(title: tr("Colores"), width: 440, target: model) {
             HStack {
                 Button {
                     model.pickColor()
@@ -583,19 +583,19 @@ struct ColorsForm: View {
                     .disabled(palette.working || model.device == nil)
             }
             if let problem = palette.problem {
-                Text(problem).font(.callout).foregroundStyle(.secondary)
+                Text(tr(problem)).font(.callout).foregroundStyle(.secondary)
             }
             if !palette.swatches.isEmpty {
                 let hues = palette.swatches.filter(\.hasHue), greys = palette.swatches.filter { !$0.hasHue }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         if !hues.isEmpty {
-                            Labeled("Colores de esta pantalla · \(hues.count)") {
+                            Labeled(tr("Colores de esta pantalla · %@", "\(hues.count)")) {
                                 LazyVGrid(columns: columns, spacing: 8) { ForEach(hues) { tile($0, detail: share($0)) } }
                             }
                         }
                         if !greys.isEmpty {
-                            Labeled("Fondos y neutros · \(greys.count)") {
+                            Labeled(tr("Fondos y neutros · %@", "\(greys.count)")) {
                                 LazyVGrid(columns: columns, spacing: 8) { ForEach(greys) { tile($0, detail: share($0)) } }
                             }
                         }
@@ -603,11 +603,11 @@ struct ColorsForm: View {
                 }
                 .frame(maxHeight: 330)
             }
-            Labeled(palette.named.isEmpty ? "Catálogo de la app" : "Catálogo de la app · \(palette.named.count == 1 ? "1 color con nombre" : "\(palette.named.count) colores con nombre")") {
+            Labeled(palette.named.isEmpty ? "Catálogo de la app" : tr("Catálogo de la app · %@", "\(palette.named.count == 1 ? "1 color con nombre" : "\(palette.named.count) colores con nombre")")) {
                 if palette.named.isEmpty {
                     Text(palette.swatches.isEmpty && !palette.working
                          ? "Pulsa «Analizar pantalla» para ver los colores en uso y los que la app declara."
-                         : "Esta app no declara colores con nombre en su catálogo: los define en código, y ahí el nombre no se conserva.")
+                         : tr("Esta app no declara colores con nombre en su catálogo: los define en código, y ahí el nombre no se conserva."))
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 } else {
                     LazyVGrid(columns: columns, spacing: 8) {
@@ -623,14 +623,14 @@ struct ColorsForm: View {
     }
 
     private func share(_ swatch: Swatch) -> String {
-        swatch.share >= 0.01 ? "\(Int((swatch.share * 100).rounded())) %" : "menos del 1 %"
+        swatch.share >= 0.01 ? "\(Int((swatch.share * 100).rounded())) %" : tr("menos del 1 %")
     }
 
     private func tile(_ swatch: Swatch, detail: String) -> some View {
         Button {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(swatch.swift, forType: .string)
-            model.say("\(swatch.token ?? swatch.hex) copiado como Color de SwiftUI")
+            model.say(tr("%@ copiado como Color de SwiftUI", "\(swatch.token ?? swatch.hex)"))
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 RoundedRectangle(cornerRadius: 7, style: .continuous).fill(swatch.color)
@@ -646,6 +646,6 @@ struct ColorsForm: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(swatch.swift)
+        .help(tr(swatch.swift))
     }
 }

@@ -168,8 +168,8 @@ private struct AppCard: View {
                     HStack(spacing: 14) {
                         AppBadge(app: app, size: 56)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(app.name).font(.title2.weight(.semibold)).lineLimit(1)
-                            Text(app.bundleID).font(.callout).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
+                            Text(tr(app.name)).font(.title2.weight(.semibold)).lineLimit(1)
+                            Text(tr(app.bundleID)).font(.callout).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
                         }
                     }
                     HStack(spacing: 10) {
@@ -208,8 +208,8 @@ private struct AppCard: View {
 
     private func fact(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.title3.weight(.semibold).monospacedDigit()).textSelection(.enabled).lineLimit(1).minimumScaleFactor(0.7)
+            Text(tr(title)).font(.caption).foregroundStyle(.secondary)
+            Text(tr(value)).font(.title3.weight(.semibold).monospacedDigit()).textSelection(.enabled).lineLimit(1).minimumScaleFactor(0.7)
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -218,8 +218,8 @@ private struct AppCard: View {
 
     private func row(_ title: String, _ value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(title).foregroundStyle(.secondary).frame(width: 96, alignment: .leading)
-            Text(value).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+            Text(tr(title)).foregroundStyle(.secondary).frame(width: 96, alignment: .leading)
+            Text(tr(value)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
         }
         .font(.callout)
     }
@@ -248,9 +248,11 @@ struct AppFacts {
         let executable = bundle.appendingPathComponent(plist["CFBundleExecutable"] as? String ?? "")
         if let date = (try? FileManager.default.attributesOfItem(atPath: executable.path))?[.modificationDate] as? Date {
             let formatter = RelativeDateTimeFormatter()
-            formatter.locale = Locale(identifier: "es")
+            // Dates read in the language Saguru is running in.
+            let language = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "es")
+            formatter.locale = language
             let exact = DateFormatter()
-            exact.locale = Locale(identifier: "es")
+            exact.locale = language
             exact.dateFormat = "d MMM, HH:mm"
             built = "\(exact.string(from: date)) · \(formatter.localizedString(for: date, relativeTo: Date()))"
         }

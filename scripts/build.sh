@@ -36,6 +36,8 @@ xcrun -sdk iphonesimulator clang -arch arm64 -arch x86_64 -dynamiclib -fobjc-arc
 cp vendor/scrcpy/scrcpy-server "$APP/Contents/Resources/scrcpy-server"
 cp vendor/scrcpy/VERSION "$APP/Contents/Resources/scrcpy-server.version"
 cp vendor/scrcpy/LICENSE "$APP/Contents/Resources/scrcpy-LICENSE.txt"
+# The interface in other languages: Localization/<language>.json becomes <language>.lproj in the app.
+python3 scripts/make-strings.py "$APP/Contents/Resources" >/dev/null
 # The pictures of the introduction shown the first time the panel is unfolded.
 if compgen -G "assets/onboarding/*.jpg" >/dev/null; then
   mkdir -p "$APP/Contents/Resources/onboarding"
@@ -54,6 +56,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>saguru</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleDevelopmentRegion</key><string>es</string>
+  <key>CFBundleLocalizations</key><array><string>es</string><string>en</string><string>zh-Hans</string><string>ja</string></array>
   <key>CFBundleShortVersionString</key><string>0.3.2</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>

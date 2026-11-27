@@ -69,7 +69,7 @@ enum USBMux {
     static func connect(serial: String, port: UInt16) -> Int32? {
         guard let phone = phones().first(where: { $0.serial == serial }), let fd = open() else { return nil }
         // The port travels in network byte order, inside a field read in this machine's.
-        guard let answer = ask(fd, ["MessageType": "Connect", "DeviceID": phone.id, "PortNumber": Int(port.bigEndian)]),
+        guard let answer = ask(fd, ["MessageType": tr("Connect"), "DeviceID": phone.id, "PortNumber": Int(port.bigEndian)]),
               answer["Number"] as? Int == 0 else { close(fd); return nil }
         return fd
     }

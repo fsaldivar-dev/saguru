@@ -53,7 +53,7 @@ enum SQLiteReader {
     }
 
     static func query(_ url: URL, _ sql: String) -> QueryResult {
-        guard let handle = open(url) else { return QueryResult(error: "No se pudo abrir la base de datos.") }
+        guard let handle = open(url) else { return QueryResult(error: tr("No se pudo abrir la base de datos.")) }
         defer { sqlite3_close(handle) }
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
@@ -62,7 +62,7 @@ enum SQLiteReader {
         defer { sqlite3_finalize(statement) }
         // The file is open read-only anyway; this gives a clear message instead of SQLite's.
         guard sqlite3_stmt_readonly(statement) != 0 else {
-            return QueryResult(error: "Solo consultas de lectura (SELECT). Saguru no modifica las bases de datos de la app.")
+            return QueryResult(error: tr("Solo consultas de lectura (SELECT). Saguru no modifica las bases de datos de la app."))
         }
         var result = QueryResult()
         let count = sqlite3_column_count(statement)
@@ -81,7 +81,7 @@ enum SQLiteReader {
             result.rows.append((0..<count).map { column in
                 switch sqlite3_column_type(statement, column) {
                 case SQLITE_NULL: return "NULL"
-                case SQLITE_BLOB: return "‹\(sqlite3_column_bytes(statement, column)) bytes›"
+                case SQLITE_BLOB: return tr("‹%@ bytes›", "\(sqlite3_column_bytes(statement, column))")
                 default: return sqlite3_column_text(statement, column).map { String(cString: $0) } ?? ""
                 }
             })
@@ -198,7 +198,7 @@ final class DataModel: ObservableObject {
         let lines = [result.columns] + result.rows
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(lines.map { $0.joined(separator: "\t") }.joined(separator: "\n"), forType: .string)
-        panel.say("\(result.rows.count) filas copiadas")
+        panel.say(tr("%@ filas copiadas", "\(result.rows.count)"))
     }
 }
 
@@ -225,9 +225,9 @@ struct DataForm: View {
     private var bundleID: String { model.appID }
 
     var body: some View {
-        FormBox(title: "Datos de la app", width: 660, target: model) {
+        FormBox(title: tr("Datos de la app"), width: 660, target: model) {
             Picker("Sección", selection: $tab) {
-                ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                ForEach(Tab.allCases, id: \.self) { Text(tr($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -264,7 +264,7 @@ struct DataForm: View {
         }
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("User Defaults · \(model.defaults.count) valores · la app los lee al arrancar")
+                Text(tr("User Defaults · %@ valores · la app los lee al arrancar", "\(model.defaults.count)"))
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 TextField("Buscar clave o valor", text: $search).frame(width: 220)
@@ -280,7 +280,7 @@ struct DataForm: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     if entries.isEmpty {
-                        Text(model.defaults.isEmpty ? "La app no ha guardado ninguna preferencia." : "Sin resultados")
+                        Text(model.defaults.isEmpty ? "La app no ha guardado ninguna preferencia." : tr("Sin resultados"))
                             .font(.callout).foregroundStyle(.secondary).padding(.vertical, 30)
                     }
                     ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
@@ -316,7 +316,7 @@ struct DataForm: View {
     @ViewBuilder
     private var databases: some View {
         if data.databases.isEmpty {
-            Text(data.problem ?? "Esta app no tiene bases de datos SQLite (Core Data, SwiftData, GRDB…) en su contenedor.")
+            Text(data.problem ?? tr("Esta app no tiene bases de datos SQLite (Core Data, SwiftData, GRDB…) en su contenedor."))
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
@@ -332,7 +332,7 @@ struct DataForm: View {
                         LazyVStack(alignment: .leading, spacing: 1) {
                             ForEach(data.tables, id: \.name) { entry in
                                 HStack(spacing: 6) {
-                                    Text(entry.name).lineLimit(1).truncationMode(.middle)
+                                    Text(tr(entry.name)).lineLimit(1).truncationMode(.middle)
                                     Spacer(minLength: 4)
                                     Text("\(entry.rows)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                                 }
@@ -357,14 +357,14 @@ struct DataForm: View {
                                 .help("Ejecutar la consulta (⌘↩)")
                         }
                         if let error = data.result.error {
-                            Label(error, systemImage: "exclamationmark.triangle")
+                            Label(tr(error), systemImage: "exclamationmark.triangle")
                                 .font(.callout).foregroundStyle(Color(nsColor: .systemOrange))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         ResultGrid(result: data.result)
                         HStack {
                             Text(data.result.columns.isEmpty ? "" :
-                                 "\(data.result.rows.count) filas" + (data.result.truncated ? " (hay más; añade LIMIT o WHERE)" : ""))
+                                 tr("%@ filas", "\(data.result.rows.count)") + (data.result.truncated ? " (hay más; añade LIMIT o WHERE)" : ""))
                                 .font(.caption).foregroundStyle(.secondary)
                             if data.running { ProgressView().controlSize(.small) }
                             Spacer()
@@ -386,7 +386,7 @@ struct DataForm: View {
         let list = search.isEmpty ? data.files : data.files.filter { $0.path.localizedCaseInsensitiveContains(search) }
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("\(data.files.count) archivos · \(bytes(data.files.reduce(0) { $0 + $1.size }))")
+                Text(tr("%@ archivos · %@", "\(data.files.count)", "\(bytes(data.files.reduce(0) { $0 + $1.size }))"))
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 TextField("Buscar archivo", text: $search).frame(width: 220)
@@ -397,7 +397,7 @@ struct DataForm: View {
                         HStack(spacing: 8) {
                             Image(systemName: file.isDatabase ? "cylinder.split.1x2" : "doc")
                                 .font(.caption).frame(width: 16).foregroundStyle(.secondary)
-                            Text(file.path).lineLimit(1).truncationMode(.middle)
+                            Text(tr(file.path)).lineLimit(1).truncationMode(.middle)
                             Spacer(minLength: 8)
                             Text(bytes(file.size)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
@@ -410,7 +410,7 @@ struct DataForm: View {
                 }
             }
             .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text(data.problem ?? "Haz clic en un archivo para mostrarlo en Finder.").font(.caption).foregroundStyle(.secondary)
+            Text(data.problem ?? tr("Haz clic en un archivo para mostrarlo en Finder.")).font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -466,13 +466,13 @@ private struct ResultGrid: View {
     private func line(_ cells: [String], header: Bool) -> some View {
         HStack(spacing: 0) {
             ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
-                Text(cell)
+                Text(tr(cell))
                     .font(header ? .caption.weight(.semibold) : .system(.caption, design: .monospaced))
                     .foregroundStyle(cell == "NULL" && !header ? .secondary : .primary)
                     .lineLimit(1).truncationMode(.tail)
                     .frame(width: width, alignment: .leading)
                     .padding(.horizontal, 6).padding(.vertical, 4)
-                    .help(cell)
+                    .help(tr(cell))
             }
         }
     }
@@ -496,9 +496,9 @@ private struct DefaultsRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(entry.key).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
-                .frame(width: 250, alignment: .leading).help(entry.key)
-            Text(kind).font(.caption).foregroundStyle(.secondary).frame(width: 62, alignment: .leading)
+            Text(tr(entry.key)).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                .frame(width: 250, alignment: .leading).help(tr(entry.key))
+            Text(tr(kind)).font(.caption).foregroundStyle(.secondary).frame(width: 62, alignment: .leading)
             switch entry.kind {
             case .bool:
                 Toggle("", isOn: Binding(
@@ -507,7 +507,7 @@ private struct DefaultsRow: View {
                     .labelsHidden().toggleStyle(.switch).controlSize(.mini)
                 Spacer()
             case .other:
-                Text(entry.text).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                Text(tr(entry.text)).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
             default:
                 TextField("", text: $text)
@@ -520,7 +520,7 @@ private struct DefaultsRow: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .accessibilityLabel("Eliminar \(entry.key)")
+            .accessibilityLabel(tr("Eliminar %@", "\(entry.key)"))
         }
         .onAppear { text = entry.text }
         .onChange(of: entry.text) { text = entry.text }

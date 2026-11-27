@@ -73,22 +73,22 @@ struct FormBox<Content: View>: View {
                         .frame(width: 36, height: 36)
                         .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(.title3.weight(.semibold))
-                        Text(device ?? "Ningún simulador arrancado").font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        Text(tr(title)).font(.title3.weight(.semibold))
+                        Text(device ?? tr("Ningún simulador arrancado")).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
             } else if let target {
                 HStack(spacing: 12) {
                     AppBadge(app: target.app, size: 36)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(title).font(.title3.weight(.semibold))
-                        Text(target.target).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        Text(tr(title)).font(.title3.weight(.semibold))
+                        Text(tr(target.target)).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
             } else {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.headline)
-                    if let device { Text(device).font(.caption).foregroundStyle(.secondary) }
+                    Text(tr(title)).font(.headline)
+                    if let device { Text(tr(device)).font(.caption).foregroundStyle(.secondary) }
                 }
             }
             content()
@@ -114,7 +114,7 @@ struct Labeled<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(label).font(.callout).foregroundStyle(.secondary)
+            Text(tr(label)).font(.callout).foregroundStyle(.secondary)
             content()
         }
     }
@@ -181,7 +181,7 @@ struct ContextForm: View {
                     }
                     .labelsHidden()
                 } else {
-                    Text(model.device.map { "\($0.name) · \($0.runtime)" } ?? "Ningún simulador arrancado")
+                    Text(model.device.map { "\($0.name) · \($0.runtime)" } ?? tr("Ningún simulador arrancado"))
                 }
             }
             Labeled("App") {
@@ -190,7 +190,7 @@ struct ContextForm: View {
                     LazyVStack(spacing: 2) {
                         ForEach(apps) { app in row(app) }
                         if apps.isEmpty {
-                            Text(model.apps.isEmpty ? "Este simulador no tiene apps" : "Sin resultados")
+                            Text(model.apps.isEmpty ? "Este simulador no tiene apps" : tr("Sin resultados"))
                                 .font(.callout).foregroundStyle(.secondary).padding(.vertical, 20)
                         }
                     }
@@ -217,8 +217,8 @@ struct ContextForm: View {
             HStack(spacing: 12) {
                 AppBadge(app: app, size: 34)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(app.name).font(.body).lineLimit(1)
-                    Text(app.isUser ? app.bundleID : "\(app.bundleID) · sistema")
+                    Text(tr(app.name)).font(.body).lineLimit(1)
+                    Text(app.isUser ? app.bundleID : tr("%@ · sistema", "\(app.bundleID)"))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer(minLength: 0)
@@ -258,7 +258,7 @@ struct PushForm: View {
     @ObservedObject var model: PanelModel
     @AppStorage("push.title") private var title = "Hola"
     @AppStorage("push.subtitle") private var subtitle = ""
-    @AppStorage("push.body") private var message = "Notificación de prueba"
+    @AppStorage("push.body") private var message = tr("Notificación de prueba")
     @AppStorage("push.badge") private var badge = ""
     @AppStorage("push.sound") private var sound = true
     @AppStorage("push.data") private var storedData = "[]"
@@ -282,7 +282,7 @@ struct PushForm: View {
     }
 
     var body: some View {
-        FormBox(title: "Notificación push", width: 400, target: model) {
+        FormBox(title: tr("Notificación push"), width: 400, target: model) {
             HStack(alignment: .top, spacing: 20) {
                 VStack(alignment: .leading, spacing: 16) {
                     if showJSON { jsonEditor } else { fields }
@@ -304,7 +304,7 @@ struct PushForm: View {
             }
             permission
             HStack {
-                Button(showJSON ? "Ver formulario" : "Ver JSON") {
+                Button(showJSON ? "Ver formulario" : tr("Ver JSON")) {
                     if !showJSON { json = String(decoding: formPayload, as: UTF8.self) }
                     showJSON.toggle()
                 }
@@ -369,7 +369,7 @@ struct PushForm: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel("Quitar \(datum.key)")
+                    .accessibilityLabel(tr("Quitar %@", "\(datum.key)"))
                 }
             }
         }
@@ -389,11 +389,11 @@ struct PushForm: View {
             AppBadge(app: model.app, size: 34)
             VStack(alignment: .leading, spacing: 1) {
                 HStack {
-                    Text(shown.title.isEmpty ? (model.app?.name ?? "App") : shown.title).font(.callout.weight(.semibold)).lineLimit(1)
+                    Text(shown.title.isEmpty ? (model.app?.name ?? tr("App")) : shown.title).font(.callout.weight(.semibold)).lineLimit(1)
                     Spacer(minLength: 4)
                     Text("ahora").font(.caption).foregroundStyle(.secondary)
                 }
-                if !shown.subtitle.isEmpty { Text(shown.subtitle).font(.callout.weight(.medium)).lineLimit(1) }
+                if !shown.subtitle.isEmpty { Text(tr(shown.subtitle)).font(.callout.weight(.medium)).lineLimit(1) }
                 Text(shown.body.isEmpty ? "Sin texto" : shown.body).font(.callout).lineLimit(4)
                     .foregroundStyle(shown.body.isEmpty ? .secondary : .primary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -429,7 +429,7 @@ struct PushForm: View {
         case .denied, .neverAsked:
             Label(model.pushPermission == .denied
                     ? "La app tiene las notificaciones denegadas: iOS no la mostrará."
-                    : "La app aún no ha pedido permiso de notificaciones: iOS no la mostrará.",
+                    : tr("La app aún no ha pedido permiso de notificaciones: iOS no la mostrará."),
                   systemImage: "exclamationmark.triangle")
                 .font(.callout).foregroundStyle(Color(nsColor: .systemOrange))
                 .fixedSize(horizontal: false, vertical: true)
@@ -456,7 +456,7 @@ struct URLForm: View {
     private var trimmed: String { url.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
-        FormBox(title: "Deep links", width: 400, target: model) {
+        FormBox(title: tr("Deep links"), width: 400, target: model) {
             Labeled("Enlace") {
                 HStack(spacing: 8) {
                     TextField("miapp://ruta o https://…", text: $url)
@@ -468,21 +468,21 @@ struct URLForm: View {
                     } label: {
                         Image(systemName: saved ? "star.fill" : "star")
                     }
-                    .help(saved ? "Quitar de favoritos" : "Guardar en favoritos")
-                    .accessibilityLabel(saved ? "Quitar de favoritos" : "Guardar en favoritos")
+                    .help(saved ? "Quitar de favoritos" : tr("Guardar en favoritos"))
+                    .accessibilityLabel(saved ? "Quitar de favoritos" : tr("Guardar en favoritos"))
                     .disabled(trimmed.isEmpty)
                 }
             }
             declared
             if !model.favoriteLinks.isEmpty {
                 Divider()
-                list("Favoritos", model.favoriteLinks, symbol: "star.slash", help: "Quitar de favoritos") {
+                list("Favoritos", model.favoriteLinks, symbol: "star.slash", help: tr("Quitar de favoritos")) {
                     model.setFavorite($0, false)
                 }
             }
             if !model.recentLinks.isEmpty {
                 Divider()
-                list("Recientes", model.recentLinks, symbol: "xmark", help: "Quitar del historial") {
+                list("Recientes", model.recentLinks, symbol: "xmark", help: tr("Quitar del historial")) {
                     model.forgetRecent($0)
                 }
             }
@@ -510,7 +510,7 @@ struct URLForm: View {
             if links.schemes.isEmpty && links.domains.isEmpty {
                 Text(links.hidden > 0
                      ? "Solo declara esquemas de inicio de sesión o web, no enlaces propios."
-                     : "Esta app no declara esquemas ni dominios.")
+                     : tr("Esta app no declara esquemas ni dominios."))
                     .font(.callout).fixedSize(horizontal: false, vertical: true)
             } else {
                 Flow(spacing: 6) {
@@ -528,28 +528,28 @@ struct URLForm: View {
             url = prefix
             typing = true
         } label: {
-            Text(prefix).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+            Text(tr(prefix)).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
         }
         .controlSize(.small)
-        .help("Empezar el enlace con \(prefix)")
+        .help(tr("Empezar el enlace con %@", "\(prefix)"))
     }
 
     private func list(_ title: String, _ items: [String], symbol: String, help: String,
                       remove: @escaping (String) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.callout).foregroundStyle(.secondary)
+            Text(tr(title)).font(.callout).foregroundStyle(.secondary)
             ForEach(items, id: \.self) { item in
                 HStack(spacing: 8) {
                     Button {
                         url = item
                         model.openURL(item)
                     } label: {
-                        Text(item).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
+                        Text(tr(item)).font(.system(.callout, design: .monospaced)).lineLimit(1).truncationMode(.middle)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("Abrir \(item)")
+                    .help(tr("Abrir %@", "\(item)"))
                     Button {
                         remove(item)
                     } label: {
@@ -557,7 +557,7 @@ struct URLForm: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help(help)
+                    .help(tr(help))
                     .accessibilityLabel("\(help): \(item)")
                 }
             }
@@ -582,7 +582,7 @@ struct LocationForm: View {
     }
 
     var body: some View {
-        FormBox(title: "Ubicación", device: model.device?.name, width: 420, symbol: "location") {
+        FormBox(title: tr("Ubicación"), device: model.device?.name, width: 420, symbol: "location") {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     TextField("Buscar un lugar o una dirección", text: $query).onSubmit(search)
@@ -594,9 +594,9 @@ struct LocationForm: View {
                         results = []
                     } label: {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(item.name ?? "Lugar").lineLimit(1)
+                            Text(item.name ?? tr("Lugar")).lineLimit(1)
                             if let detail = item.placemark.title, detail != item.name {
-                                Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text(tr(detail)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -622,7 +622,7 @@ struct LocationForm: View {
                 Labeled("Longitud") { TextField("", text: $longitude) }
             }
             if let current = model.device.flatMap({ model.simulatedLocations[$0.udid] }) {
-                Label("Simulando \(current)", systemImage: "location.fill")
+                Label(tr("Simulando %@", "\(current)"), systemImage: "location.fill")
                     .font(.callout).foregroundStyle(Color(nsColor: .systemGreen))
             } else {
                 Text("Haz clic en el mapa para elegir el punto.").font(.callout).foregroundStyle(.secondary)
@@ -685,7 +685,7 @@ struct AppearanceForm: View {
     @ObservedObject var model: PanelModel
 
     var body: some View {
-        FormBox(title: "Apariencia", device: model.device?.name, width: 340, symbol: "circle.lefthalf.filled") {
+        FormBox(title: tr("Apariencia"), device: model.device?.name, width: 340, symbol: "circle.lefthalf.filled") {
             HStack(spacing: 14) {
                 tile("Claro", "sun.max", value: "light", page: Color(white: 0.96), ink: Color(white: 0.15))
                 tile("Oscuro", "moon", value: "dark", page: Color(white: 0.09), ink: Color(white: 0.92))
@@ -698,7 +698,7 @@ struct AppearanceForm: View {
                 if model.capturing { ProgressView().controlSize(.small) }
             }
             if model.split == .appearance {
-                Text("\(model.splitLabels.0) a la izquierda, \(model.splitLabels.1) a la derecha.")
+                Text(tr("%@ a la izquierda, %@ a la derecha.", "\(model.splitLabels.0)", "\(model.splitLabels.1)"))
                     .font(.callout).foregroundStyle(.secondary)
             }
             Text("El lado derecho es la app en vivo. El izquierdo es una foto de la otra apariencia, que Saguru vuelve a tomar sola cuando la pantalla cambia y se queda quieta. Arrastra el tirador para comparar.")
@@ -732,13 +732,13 @@ struct AppearanceForm: View {
                 HStack(spacing: 6) {
                     Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(chosen ? Color(nsColor: .systemBlue) : Color.secondary)
-                    Text(name).fontWeight(chosen ? .semibold : .regular)
+                    Text(tr(name)).fontWeight(chosen ? .semibold : .regular)
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(name)
+        .accessibilityLabel(tr(name))
     }
 }
 
@@ -746,7 +746,7 @@ struct StatusBarForm: View {
     @ObservedObject var model: PanelModel
 
     var body: some View {
-        FormBox(title: "Barra de estado", device: model.device?.name, width: 420, symbol: "antenna.radiowaves.left.and.right") {
+        FormBox(title: tr("Barra de estado"), device: model.device?.name, width: 420, symbol: "antenna.radiowaves.left.and.right") {
             preview
             Toggle("Personalizar la barra de estado", isOn: Binding(get: { model.cleanBar }, set: { model.setStatusBar(on: $0) }))
             VStack(alignment: .leading, spacing: 14) {
@@ -764,7 +764,7 @@ struct StatusBarForm: View {
                 Divider()
                 Labeled("Red celular") {
                     Picker("Red celular", selection: $model.statusBar.cellular) {
-                        ForEach(Simctl.StatusBar.cellularModes, id: \.id) { Text($0.name).tag($0.id) }
+                        ForEach(Simctl.StatusBar.cellularModes, id: \.id) { Text(tr($0.name)).tag($0.id) }
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
@@ -773,7 +773,7 @@ struct StatusBarForm: View {
                         HStack(spacing: 10) {
                             Text("Datos").foregroundStyle(.secondary).frame(width: 74, alignment: .leading)
                             Picker("Datos", selection: $model.statusBar.data) {
-                                ForEach(Simctl.StatusBar.dataTypes, id: \.id) { Text($0.name).tag($0.id) }
+                                ForEach(Simctl.StatusBar.dataTypes, id: \.id) { Text(tr($0.name)).tag($0.id) }
                             }
                             .pickerStyle(.segmented)
                             .labelsHidden()
@@ -854,7 +854,7 @@ struct StatusBarForm: View {
 
     private func level(_ name: String, _ value: Binding<Int>, upTo top: Int) -> some View {
         HStack(spacing: 10) {
-            Text(name).foregroundStyle(.secondary).frame(width: 74, alignment: .leading)
+            Text(tr(name)).foregroundStyle(.secondary).frame(width: 74, alignment: .leading)
             Picker(name, selection: value) {
                 ForEach(0...top, id: \.self) { Text("\($0)").tag($0) }
             }

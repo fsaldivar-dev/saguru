@@ -105,7 +105,7 @@ enum MediaLibrary {
             do {
                 try Simctl.addMedia(udid, files: copies)
             } catch {
-                throw SimError(description: "la fototeca quedó vacía y no se pudieron volver a añadir las fotos; están a salvo en \(safe.path)")
+                throw SimError(description: tr("la fototeca quedó vacía y no se pudieron volver a añadir las fotos; están a salvo en %@", "\(safe.path)"))
             }
         }
         try? fm.removeItem(at: safe)
@@ -205,8 +205,8 @@ final class GalleryModel: ObservableObject {
                 if (try? FileManager.default.copyItem(at: item.file, to: target)) != nil { exported.append(target) }
             }
             self.panel.say(exported.count == chosen.count
-                ? (exported.count == 1 ? "1 archivo exportado" : "\(exported.count) archivos exportados")
-                : "Solo se exportaron \(exported.count) de \(chosen.count)")
+                ? (exported.count == 1 ? "1 archivo exportado" : tr("%@ archivos exportados", "\(exported.count)"))
+                : tr("Solo se exportaron %@ de %@", "\(exported.count)", "\(chosen.count)"))
             if !exported.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(exported) }
         }
     }
@@ -216,14 +216,14 @@ final class GalleryModel: ObservableObject {
         let doomed = selection
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = doomed.count == 1 ? "¿Eliminar esta foto del simulador?" : "¿Eliminar \(doomed.count) elementos del simulador?"
+        alert.messageText = doomed.count == 1 ? "¿Eliminar esta foto del simulador?" : tr("¿Eliminar %@ elementos del simulador?", "\(doomed.count)")
         alert.informativeText = "El simulador no permite borrar fotos sueltas, así que Saguru vacía la fototeca y vuelve a añadir las demás. Se pierden los álbumes, favoritos y ediciones hechos dentro del simulador."
-        alert.addButton(withTitle: "Eliminar").hasDestructiveAction = true
-        alert.addButton(withTitle: "Cancelar")
+        alert.addButton(withTitle: tr("Eliminar")).hasDestructiveAction = true
+        alert.addButton(withTitle: tr("Cancelar"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         // The library is rebuilt and its file names reassigned: nothing selected before means the same after.
         selection = []
-        run(doomed.count == 1 ? "1 elemento eliminado" : "\(doomed.count) elementos eliminados") {
+        run(doomed.count == 1 ? "1 elemento eliminado" : tr("%@ elementos eliminados", "\(doomed.count)")) {
             try MediaLibrary.remove(doomed, from: udid)
         }
     }
@@ -260,7 +260,7 @@ struct GalleryView: View {
             grid
             Divider()
             Text(panel.status.isEmpty
-                 ? "Arrastra archivos aquí para añadirlos, o arrastra una foto a Finder para exportarla."
+                 ? tr("Arrastra archivos aquí para añadirlos, o arrastra una foto a Finder para exportarla.")
                  : panel.status)
                 .font(.callout).foregroundStyle(.secondary).lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -307,7 +307,7 @@ struct GalleryView: View {
                 .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Galería").font(.title3.weight(.semibold))
-                Text(subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                Text(tr(subtitle)).font(.callout).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             if model.busy { ProgressView().controlSize(.small) }
@@ -328,7 +328,7 @@ struct GalleryView: View {
 
     private var selectionBar: some View {
         HStack(spacing: 10) {
-            Text(model.selection.count == 1 ? "1 seleccionado" : "\(model.selection.count) seleccionados")
+            Text(model.selection.count == 1 ? "1 seleccionado" : tr("%@ seleccionados", "\(model.selection.count)"))
             Button("Quitar selección") { model.selection = [] }.buttonStyle(.link)
             Spacer()
             Button {
@@ -404,9 +404,9 @@ struct GalleryView: View {
             .onTapGesture { model.toggle(item) }
             .onDrag { NSItemProvider(contentsOf: item.file) ?? NSItemProvider() }
             .onAppear { model.needThumbnail(item) }
-            .help(item.file.lastPathComponent)
+            .help(tr(item.file.lastPathComponent))
             .accessibilityElement()
-            .accessibilityLabel(item.file.lastPathComponent)
+            .accessibilityLabel(tr(item.file.lastPathComponent))
             .accessibilityAddTraits(selected ? [.isButton, .isSelected] : [.isButton])
             .accessibilityAction { model.toggle(item) }
     }

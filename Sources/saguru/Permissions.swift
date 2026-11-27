@@ -244,13 +244,13 @@ struct PrivacyForm: View {
     }
 
     var body: some View {
-        FormBox(title: "Permisos", width: 520, target: model) {
+        FormBox(title: tr("Permisos"), width: 520, target: model) {
             VStack(spacing: 0) {
                 if !rows.isEmpty {
                     HStack(spacing: 0) {
                         Spacer()
                         ForEach(columns, id: \.choice) { column in
-                            Text(column.title)
+                            Text(tr(column.title))
                                 .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                                 .frame(width: columnWidth)
                         }
@@ -266,7 +266,7 @@ struct PrivacyForm: View {
                     }
                     ForEach(model.declared.fixed, id: \.name) { entry in
                         info(entry.name, symbol: entry.symbol, color: Color(nsColor: .systemGray),
-                             value: "Declarado", note: "el simulador no deja cambiarlo")
+                             value: tr("Declarado"), note: tr("el simulador no deja cambiarlo"))
                         Divider().padding(.leading, 50)
                     }
                     notifications
@@ -307,10 +307,10 @@ struct PrivacyForm: View {
         return HStack(spacing: 0) {
             tile(permission.symbol, permission.color)
             VStack(alignment: .leading, spacing: 1) {
-                Text(permission.name).lineLimit(1)
+                Text(tr(permission.name)).lineLimit(1)
                 // What "limited" means here, for the two permissions that have it.
                 if choices.contains(.partial) {
-                    Text("Limitado: \(permission.label(.partial).lowercased())")
+                    Text(tr("Limitado: %@", "\(permission.label(.partial).lowercased())"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -347,8 +347,8 @@ struct PrivacyForm: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(label)
-        .accessibilityLabel(label)
+        .help(tr(label))
+        .accessibilityLabel(tr(label))
         .accessibilityAddTraits(on ? [.isSelected] : [])
     }
 
@@ -356,9 +356,9 @@ struct PrivacyForm: View {
     private func info(_ name: String, symbol: String, color: Color, value: String, note: String) -> some View {
         HStack(spacing: 12) {
             tile(symbol, color)
-            Text(name)
+            Text(tr(name))
             Spacer(minLength: 8)
-            Text(value)
+            Text(tr(value))
             Text("· \(note)").foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)
@@ -375,6 +375,6 @@ struct PrivacyForm: View {
         case .unknown: value = "Desconocido"
         }
         return info("Notificaciones", symbol: "bell.badge.fill", color: Color(nsColor: .systemRed),
-                    value: value, note: "solo la app puede pedirlo")
+                    value: value, note: tr("solo la app puede pedirlo"))
     }
 }

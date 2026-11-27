@@ -45,7 +45,7 @@ enum ADB {
             let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
             guard parts.count >= 2, ["device", "unauthorized", "offline", "authorizing"].contains(parts[1]) else { return nil }
             let model = parts.first { $0.hasPrefix("model:") }?.dropFirst(6).replacingOccurrences(of: "_", with: " ")
-            return (parts[0], model ?? (parts[1] == "device" ? parts[0] : "Android"), parts[1] == "device", parts[1])
+            return (parts[0], model ?? (parts[1] == "device" ? parts[0] : tr("Android")), parts[1] == "device", parts[1])
         }
     }
 }
@@ -129,7 +129,7 @@ final class AndroidCamera {
                     if !received, attempt < 12 {
                         self.queue.asyncAfter(deadline: .now() + 0.4) { self.connect(attempt: attempt + 1) }
                     } else if self.running {
-                        self.onProblem?(received ? "El teléfono dejó de enviar la cámara." : "El teléfono no entregó su cámara. Desbloquéalo y vuelve a elegirlo.")
+                        self.onProblem?(received ? "El teléfono dejó de enviar la cámara." : tr("El teléfono no entregó su cámara. Desbloquéalo y vuelve a elegirlo."))
                     }
                     return
                 }
