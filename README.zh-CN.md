@@ -87,6 +87,8 @@ saguru
   <img src="assets/giroscopio.gif" alt="多张图片，以及用来旋转和倾斜画面的陀螺仪" width="820">
 </p>
 
+**通过数据线使用 iPhone，无需 Wi-Fi 和 iCloud。**Apple 的连续互通相机要求 iPhone 和 Mac 登录同一个 iCloud 账户。Saguru 自带一个 iPhone 应用 Saguru Cámara，通过 USB 数据线发送相机画面：用 `scripts/install-companion.sh <TEAM_ID>` 安装一次，在手机上打开，面板中就会出现“iPhone por USB”，可选后置或前置摄像头。视频走的是 Xcode 与 iPhone 之间使用的同一条通道。
+
 在工具打开时接入摄像头、iPhone 或 Android 手机，它会自动出现在列表中并标记为“新”；如果 Android 手机还没有允许 USB 调试，Saguru 会直接在那里提示。
 
 <p align="center">

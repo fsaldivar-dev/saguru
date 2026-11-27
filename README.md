@@ -108,6 +108,11 @@ Todo eso también se aplica a las cámaras en vivo.
   <img src="assets/giroscopio.gif" alt="Varias imágenes y un giroscopio para girar e inclinar lo que ve la app" width="820">
 </p>
 
+**iPhone por cable, sin wifi ni iCloud.** La Cámara de Continuidad de Apple exige la misma cuenta de iCloud en el
+iPhone y en la Mac. Saguru trae su propia app para el iPhone, Saguru Cámara, que manda la cámara por el cable USB:
+la instalas una vez con `scripts/install-companion.sh <TEAM_ID>`, la abres en el teléfono y en el panel aparece
+«iPhone por USB», con cámara trasera o frontal. El video viaja por el mismo túnel que usa Xcode con el iPhone.
+
 Si conectas una cámara, un iPhone o un Android con la herramienta abierta, aparece sola en la lista, marcada como nueva; si al Android le falta aceptar la depuración USB, Saguru te lo dice ahí mismo.
 
 <p align="center">
@@ -261,7 +266,8 @@ Saguru prefiere decir lo que no hace. Lo mismo aparece dentro de cada herramient
   hilos a la vez…), cada una en su proceso. Si tu app hace algo que no está ahí y falla, ese es el issue que más ayuda.
 - La cámara simulada responde con «nada» (nil, cero) a cualquier método de `AVCaptureDevice` y compañía que no
   tenga respuesta propia, en vez de cerrar la app, y lo anota una vez en el registro de la app:
-  `Saguru camera: -[AVCaptureDevice …] has no stand-in`. Si tu app se comporta raro con la cámara, busca esas líneas. Un
+  `Saguru camera: -[AVCaptureDevice …] has no stand-in`. Si tu app se comporta raro con la cámara, busca esas líneas. El iPhone por USB necesita la app Saguru Cámara instalada y abierta en pantalla (se instala con tu propio equipo de
+  desarrollo de Apple; no está en la App Store). Un
   Android como fuente necesita `adb`, depuración USB y Android 12 o posterior; usa su cámara trasera. El video lo
   entrega el servidor de scrcpy, que va incluido en Saguru (`vendor/scrcpy`, licencia Apache 2.0). La app solo recibe
   la cámara si Saguru la lanzó.
