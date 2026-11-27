@@ -25,6 +25,27 @@ dispositivo real.
   <img src="assets/red.gif" alt="Saguru se despliega junto al Simulador y captura las peticiones de la app" width="900">
 </p>
 
+## Nuevo en 0.2: una cámara de pruebas que mueves con la mano
+
+<p align="center">
+  <img src="assets/hero-0.2.jpg" alt="Saguru 0.2: varias imágenes, giroscopio y zoom" width="900">
+</p>
+
+Probar un flujo de captura siempre fue lo mismo: imprimir la credencial, sostener el teléfono, inclinarlo, buscar
+luz, repetir. Con Saguru 0.2 lo haces sentado, y en segundos:
+
+- **Un caso por imagen.** Carga la credencial buena, la que no es una credencial y la que salió cortada. Cambias de
+  una a otra con un clic (o ⌘1…⌘9) y tu app la recibe al instante, sin relanzar.
+- **Un giroscopio sobre la imagen.** El anillo azul la gira, arrastrar por dentro la inclina en perspectiva y el
+  centro la mueve. Es lo que haría tu mano con el teléfono, pero repetible.
+- **Zoom para acercarte o alejarte**, con botones o pellizcando.
+- **Una cámara que se comporta como la de un teléfono.** Tamaño del preset, fotogramas en YUV, giro y espejo de cada
+  conexión, y todos los avisos de una foto. Probada con un flujo real de captura de identificaciones.
+
+<p align="center">
+  <img src="assets/giroscopio.gif" alt="Se cambia de imagen y se gira e inclina la credencial con el giroscopio; la app lo recibe en vivo" width="900">
+</p>
+
 ## Por qué Saguru
 
 - **No toca tu app.** No hay SDK que integrar ni código que añadir. Lo que necesita estar dentro de la app (red y
@@ -71,10 +92,14 @@ en vivo, fotogramas para Vision y OCR, lectura de QR, foto, cámara frontal y tr
 sistema. Cambiar de fuente no requiere relanzar la app. Saguru encuadra la imagen al tamaño que pide tu app, rellenando el cuadro o
 mostrándola completa.
 
-Con imágenes puedes preparar un caso por foto (una identificación, algo que no lo es, una recortada) y cambiar de
-una a otra con un clic o con ⌘1…⌘9 mientras la app sigue abierta. Los ajustes hacen lo que haría mover el teléfono:
-acercar o alejar, girar, inclinar en perspectiva y desplazar la imagen arrastrándola. También se aplican a las
-cámaras en vivo.
+Prepara un caso por imagen (una identificación, algo que no lo es, una recortada) y cambia de una a otra con un
+clic o con ⌘1…⌘9 mientras la app sigue abierta. Sobre la imagen hay un giroscopio, como el de un editor 3D: el
+anillo azul la gira, arrastrar por dentro la inclina en perspectiva y el centro la mueve; abajo tienes el zoom.
+Todo eso también se aplica a las cámaras en vivo.
+
+<p align="center">
+  <img src="assets/giroscopio.gif" alt="Varias imágenes y un giroscopio para girar e inclinar lo que ve la app" width="820">
+</p>
 
 <p align="center">
   <img src="assets/camara.gif" alt="La app del simulador recibe una cámara, lee un QR y toma una foto" width="820">

@@ -25,6 +25,23 @@
   <img src="assets/red.gif" alt="Saguru unfolds beside the Simulator and captures the app's requests" width="900">
 </p>
 
+## New in 0.2: a test camera you move by hand
+
+<p align="center">
+  <img src="assets/hero-0.2.en.jpg" alt="Saguru 0.2: several pictures, a gyroscope and zoom" width="900">
+</p>
+
+Testing a capture flow used to mean printing the ID, holding the phone, tilting it, finding the light, and doing it again. With Saguru 0.2 you do it from your chair, in seconds:
+
+- **One case per picture.** Load the good ID, the thing that is not an ID, and the one that came out cropped. Switch between them with a click (or ⌘1…⌘9) and your app gets it at once, with no relaunch.
+- **A gyroscope on the picture.** The blue ring rotates it, dragging inside tilts it in perspective, and the hub moves it. It is what your hand would do with the phone, only repeatable.
+- **Zoom in or out**, with buttons or a pinch.
+- **A camera that behaves like a phone's.** Preset sizes, YUV frames, rotation and mirroring per connection, and every step of a photo capture. Tested against a real ID-capture flow.
+
+<p align="center">
+  <img src="assets/giroscopio.gif" alt="Switching pictures, then rotating and tilting the ID with the gyroscope while the app receives it live" width="900">
+</p>
+
 ## Why Saguru
 
 - **It does not touch your app.** No SDK to integrate and no code to add. What has to live inside the app (network and camera) is loaded only when Saguru launches it, and only in the simulator.
@@ -60,7 +77,11 @@ Every request with its method, status, time and size. Request and response side 
 
 Pick an image, your Mac's camera, an iPhone, or an Android phone over USB, and your app sees it as its own camera: live preview, frames for Vision and OCR, QR reading, photo capture, front and back cameras, and the system camera screen. Changing the source does not require relaunching the app.
 
-With images you can prepare one case per picture (an ID, something that is not one, a cropped one) and switch between them with a click or ⌘1…⌘9 while the app keeps running. The adjustments do what moving the phone would: zoom in or out, rotate, tilt in perspective, and drag the picture to move it. They apply to live cameras too.
+Prepare one case per picture (an ID, something that is not one, a cropped one) and switch between them with a click or ⌘1…⌘9 while the app keeps running. A gyroscope sits on the picture, like the one in a 3D editor: the blue ring rotates it, dragging inside tilts it in perspective, and the hub moves it; zoom is at the bottom. All of it applies to live cameras too.
+
+<p align="center">
+  <img src="assets/giroscopio.gif" alt="Several pictures and a gyroscope to rotate and tilt what the app sees" width="820">
+</p>
 
 <p align="center">
   <img src="assets/camara.gif" alt="The app in the simulator receives a camera, reads a QR code and takes a photo" width="820">
