@@ -533,78 +533,78 @@ struct CameraForm: View {
         return CGRect(x: (pictureSize.width - size.width) / 2, y: (pictureSize.height - size.height) / 2, width: size.width, height: size.height)
     }
 
-    /// The outline of the picture with a handle on each corner (drag to resize) and one above it (drag to turn).
-    @ViewBuilder private var handles: some View {
+    private enum Grip { case roll, tilt, move }
+    private static let gyroRadius: CGFloat = 62
+
+    /// A gyroscope in the middle of the picture, as in a 3D editor: the outer ring turns it, dragging
+    /// inside leans it in depth (across for one axis, up and down for the other), and the hub moves it.
+    @ViewBuilder private var gyroscope: some View {
         let rect = frameRect
         let points = camera.outline.map { CGPoint(x: rect.minX + $0.x * rect.width, y: rect.minY + $0.y * rect.height) }
         if points.count == 4 {
-            let centre = CGPoint(x: (points[0].x + points[2].x + points[1].x + points[3].x) / 4, y: (points[0].y + points[1].y + points[2].y + points[3].y) / 4)
-            let top = CGPoint(x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2)
-            let away = hypot(top.x - centre.x, top.y - centre.y)
-            let knob = away > 1 ? CGPoint(x: top.x + (top.x - centre.x) / away * 26, y: top.y + (top.y - centre.y) / away * 26) : top
-            Path { path in path.addLines(points); path.closeSubpath(); path.move(to: top); path.addLine(to: knob) }
-                .stroke(Self.blue, lineWidth: 1.5).shadow(color: .black.opacity(0.5), radius: 1).allowsHitTesting(false)
-            ForEach(0..<4, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 2.5).fill(.white).frame(width: 10, height: 10)
-                    .overlay(RoundedRectangle(cornerRadius: 2.5).strokeBorder(Self.blue, lineWidth: 1.5))
-                    .shadow(color: .black.opacity(0.4), radius: 1.5).padding(8).contentShape(Rectangle())
-                    .position(points[index])
-                    .highPriorityGesture(DragGesture(minimumDistance: 1, coordinateSpace: .named("picture"))
-                        .onChanged { drag in
-                            let start = pinchStart ?? camera.zoom
-                            pinchStart = start
-                            let was = hypot(drag.startLocation.x - centre.x, drag.startLocation.y - centre.y)
-                            guard was > 4 else { return }
-                            // The centre moves little while resizing, so the distance to it gives the scale.
-                            let now = hypot(drag.location.x - centre.x, drag.location.y - centre.y)
-                            camera.zoom = min(max(camera.zoom * now / hypot(points[index].x - centre.x, points[index].y - centre.y), CameraModel.zoomRange.lowerBound), CameraModel.zoomRange.upperBound)
-                        }
-                        .onEnded { _ in pinchStart = nil })
-                    .help("Arrastra para acercar o alejar")
+            let radius = Self.gyroRadius
+            let middle = CGPoint(x: (points[0].x + points[1].x + points[2].x + points[3].x) / 4, y: (points[0].y + points[1].y + points[2].y + points[3].y) / 4)
+            // Kept inside the view, so it can always be reached however far the picture is moved.
+            let centre = CGPoint(x: min(max(middle.x, radius + 8), max(pictureSize.width - radius - 8, radius + 8)),
+                                 y: min(max(middle.y, radius + 8), max(pictureSize.height - radius - 8, radius + 8)))
+            let held = grip?.kind
+            ZStack {
+                Circle().fill(.black.opacity(0.22))
+                // Leaning rings: each is a circle seen almost edge-on, and opens as the picture leans its way.
+                ring(Color(nsColor: .systemRed), lit: held == .tilt)
+                    .rotation3DEffect(.degrees(68 - abs(camera.pitch) * 0.5), axis: (x: 1, y: 0, z: 0), perspective: 0.35)
+                ring(Color(nsColor: .systemGreen), lit: held == .tilt)
+                    .rotation3DEffect(.degrees(68 - abs(camera.yaw) * 0.5), axis: (x: 0, y: 1, z: 0), perspective: 0.35)
+                // Turning ring, with a bead that shows the angle.
+                ring(Self.blue, lit: held == .roll)
+                Circle().fill(.white).frame(width: 9, height: 9).overlay(Circle().strokeBorder(Self.blue, lineWidth: 1.5))
+                    .offset(y: -radius).rotationEffect(.degrees(camera.roll))
+                Circle().fill(.white).frame(width: held == .move ? 11 : 8, height: held == .move ? 11 : 8)
+                    .shadow(color: .black.opacity(0.5), radius: 2)
             }
-            Circle().fill(.white).frame(width: 12, height: 12).overlay(Circle().strokeBorder(Self.blue, lineWidth: 1.5))
-                .shadow(color: .black.opacity(0.4), radius: 1.5).padding(8).contentShape(Rectangle())
-                .position(knob)
-                .highPriorityGesture(DragGesture(minimumDistance: 1, coordinateSpace: .named("picture"))
-                    .onChanged { drag in
-                        // Each step turns by the angle between where the knob is and where the pointer is.
-                        let from = atan2(knob.y - centre.y, knob.x - centre.x), to = atan2(drag.location.y - centre.y, drag.location.x - centre.x)
-                        var turned = camera.roll + (to - from) * 180 / .pi
-                        if turned > 180 { turned -= 360 } else if turned < -180 { turned += 360 }
-                        if abs(turned) < 2 { turned = 0 }
+            .frame(width: radius * 2, height: radius * 2)
+            .shadow(color: .black.opacity(0.45), radius: 3)
+            .contentShape(Circle().inset(by: -9))
+            .position(centre)
+            .highPriorityGesture(DragGesture(minimumDistance: 1, coordinateSpace: .named("picture"))
+                .onChanged { drag in
+                    let from = CGPoint(x: drag.startLocation.x - centre.x, y: drag.startLocation.y - centre.y)
+                    let now = grip ?? {
+                        let reach = hypot(from.x, from.y)
+                        let kind: Grip = reach > radius - 11 ? .roll : (reach < 13 ? .move : .tilt)
+                        return (kind, centre, camera.roll, camera.yaw, camera.pitch, camera.offset)
+                    }()
+                    grip = now
+                    switch now.kind {
+                    case .roll:
+                        let start = atan2(drag.startLocation.y - now.centre.y, drag.startLocation.x - now.centre.x)
+                        let end = atan2(drag.location.y - now.centre.y, drag.location.x - now.centre.x)
+                        var turned = now.roll + (end - start) * 180 / .pi
+                        while turned > 180 { turned -= 360 }
+                        while turned < -180 { turned += 360 }
+                        // A little pull towards the straight angles, so they are easy to land on.
+                        for straight in [-180.0, -90, 0, 90, 180] where abs(turned - straight) < 2.5 { turned = straight }
                         camera.roll = turned
-                    })
-                .help("Arrastra para girar")
-                .accessibilityElement().accessibilityLabel("Giro").accessibilityValue(String(format: "%.0f grados", camera.roll))
-                .accessibilityAdjustableAction { camera.roll = max(-180, min(180, camera.roll + ($0 == .increment ? 15 : -15))) }
+                    case .tilt:
+                        camera.yaw = max(-60, min(60, now.yaw + drag.translation.width * 0.7))
+                        camera.pitch = max(-60, min(60, now.pitch + drag.translation.height * 0.7))
+                    case .move:
+                        camera.offset = CGSize(width: now.offset.width + drag.translation.width / rect.width,
+                                               height: now.offset.height + drag.translation.height / rect.height)
+                    }
+                }
+                .onEnded { _ in grip = nil })
+            .onTapGesture(count: 2) { camera.roll = 0; camera.yaw = 0; camera.pitch = 0 }
+            .help("Anillo azul: girar · dentro: inclinar · centro: mover · doble clic: enderezar")
+            .accessibilityElement().accessibilityLabel("Giroscopio")
+            .accessibilityValue(String(format: "giro %.0f, inclinación %.0f y %.0f grados", camera.roll, camera.yaw, camera.pitch))
+            .accessibilityAdjustableAction { camera.roll = max(-180, min(180, camera.roll + ($0 == .increment ? 15 : -15))) }
         }
     }
 
-    /// A small ball that leans the picture, like the view gizmo of a 3D editor: drag across it to tilt.
-    private var orbit: some View {
-        ZStack {
-            Circle().fill(.ultraThinMaterial)
-            Circle().strokeBorder(.white.opacity(0.18))
-            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Self.blue.opacity(0.85))
-                .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(.white.opacity(0.7), lineWidth: 1))
-                .frame(width: 24, height: 32)
-                .rotation3DEffect(.degrees(camera.yaw), axis: (x: 0, y: 1, z: 0), perspective: 0.7)
-                .rotation3DEffect(.degrees(-camera.pitch), axis: (x: 1, y: 0, z: 0), perspective: 0.7)
-        }
-        .frame(width: 58, height: 58)
-        .contentShape(Circle())
-        .highPriorityGesture(DragGesture(minimumDistance: 1)
-            .onChanged { drag in
-                let start = tiltStart ?? (camera.yaw, camera.pitch)
-                tiltStart = start
-                camera.yaw = max(-60, min(60, start.0 + drag.translation.width * 0.8))
-                camera.pitch = max(-60, min(60, start.1 + drag.translation.height * 0.8))
-            }
-            .onEnded { _ in tiltStart = nil })
-        .onTapGesture(count: 2) { camera.yaw = 0; camera.pitch = 0 }
-        .help("Arrastra para inclinar la imagen · doble clic para enderezarla")
-        .accessibilityElement().accessibilityLabel("Inclinación").accessibilityValue(String(format: "%.0f y %.0f grados", camera.yaw, camera.pitch))
-        .accessibilityAdjustableAction { camera.yaw = max(-60, min(60, camera.yaw + ($0 == .increment ? 12 : -12))) }
+    private func ring(_ color: Color, lit: Bool) -> some View {
+        Circle().strokeBorder(color.opacity(lit ? 1 : 0.9), lineWidth: lit ? 3 : 2)
+            .shadow(color: color.opacity(lit ? 0.9 : 0), radius: 5)
     }
 
     /// Zoom, quarter turns and reset, floating over the bottom of the picture.
@@ -681,7 +681,7 @@ struct CameraForm: View {
 
     @State private var dragStart: CGSize?
     @State private var pinchStart: Double?
-    @State private var tiltStart: (Double, Double)?
+    @State private var grip: (kind: Grip, centre: CGPoint, roll: Double, yaw: Double, pitch: Double, offset: CGSize)?
     @State private var pictureSize = CGSize(width: 300, height: 300)
 
     private var picture: some View {
@@ -698,9 +698,8 @@ struct CameraForm: View {
                 .foregroundStyle(.secondary)
             }
             if camera.preview != nil {
-                handles
+                gyroscope
                 VStack {
-                    HStack { Spacer(); orbit }
                     Spacer()
                     controls
                 }
