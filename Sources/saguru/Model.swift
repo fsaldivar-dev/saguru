@@ -116,7 +116,14 @@ final class PanelModel: ObservableObject {
         let key: String
         let pid: Int32
         let camera: Bool
+        /// False when the app was launched untouched, to rule Saguru out as the cause of a crash.
+        var agent = true
     }
+
+    /// The running app has Saguru's agent in it, so the camera and the network monitor can reach it.
+    var agentInside: Bool { agentAlive && agentRun?.agent == true }
+    /// Asked for in the log tool: launch the app with nothing of Saguru's inside.
+    @Published var plainLaunch = false
 
     @Published private(set) var agentRun: AgentRun?
 
@@ -129,25 +136,25 @@ final class PanelModel: ObservableObject {
     /// The one way Saguru launches an app with its agent. Whichever tool asks, the app gets everything that
     /// needs to be there from launch: the network is always reported, and the camera is in it if it was asked
     /// for. So turning on one tool never takes another away.
-    func launchWithAgent(arguments: [String] = [], completion: ((String?) -> Void)? = nil) {
+    func launchWithAgent(arguments: [String] = [], plain: Bool = false, completion: ((String?) -> Void)? = nil) {
         guard let udid = selected, !appID.isEmpty else { completion?("Elige una app."); return }
         let bundleID = appID, key = "\(udid)|\(bundleID)"
         var environment = ["SAGURU_NET_FOLDER": network.beginSession(for: key).path]
-        let cameraFolder = camera.folderForLaunch(of: key)
+        let cameraFolder = plain ? nil : camera.folderForLaunch(of: key)
         if let cameraFolder { environment["SAGURU_CAM_FOLDER"] = cameraFolder.path }
         // What the app prints is kept, so it is not lost for want of Xcode's console.
         let console = self.console
         let session = console.beginSession()
         let name = app?.name ?? bundleID
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = AgentLauncher.launch(udid: udid, bundleID: bundleID, environment: environment, arguments: arguments,
+            let result = AgentLauncher.launch(udid: udid, bundleID: bundleID, environment: plain ? [:] : environment, arguments: arguments, inject: !plain,
                                               output: { data in DispatchQueue.main.async { console.receive(data, session: session) } },
                                               ended: { DispatchQueue.main.async { self.checkAgent() } })
             DispatchQueue.main.async {
                 if let pid = result.pid, result.failure == nil {
-                    self.agentRun = AgentRun(key: key, pid: pid, camera: cameraFolder != nil)
+                    self.agentRun = AgentRun(key: key, pid: pid, camera: cameraFolder != nil, agent: !plain)
                     self.camera.launched(key, camera: cameraFolder != nil)
-                    self.console.launched(pid: pid, udid: udid, name: name)
+                    self.console.launched(pid: pid, udid: udid, name: name, plain: plain)
                 } else {
                     self.agentRun = nil
                 }

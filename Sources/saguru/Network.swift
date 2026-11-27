@@ -157,7 +157,7 @@ final class NetworkModel: ObservableObject {
 
     /// Whether the app chosen in the rail is the one being watched.
     /// The chosen app is running, launched by Saguru, and reporting its network.
-    var isWatching: Bool { watching != nil && watching == key && panel.agentAlive }
+    var isWatching: Bool { watching != nil && watching == key && panel.agentInside }
 
     var filtered: [NetEntry] {
         let text = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -183,7 +183,7 @@ final class NetworkModel: ObservableObject {
     /// because an app can only be watched from its launch.
     func start() {
         guard panel.selected != nil, !panel.appID.isEmpty else { problem = "Elige una app para ver su red."; return }
-        if panel.agentAlive, watching == key { return }
+        if panel.agentInside, watching == key { return }
         relaunch()
     }
 

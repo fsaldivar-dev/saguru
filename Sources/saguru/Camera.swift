@@ -143,7 +143,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     }
 
     /// The chosen app is running, launched by Saguru, with the camera in it.
-    var isActive: Bool { active != nil && active == key && panel.agentAlive && panel.agentRun?.camera == true }
+    var isActive: Bool { active != nil && active == key && panel.agentInside && panel.agentRun?.camera == true }
     /// Apps the camera has been asked for; they keep it on every relaunch Saguru does.
     private var wanted = Set<String>()
 
@@ -252,7 +252,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         wanted.insert(key)
         problem = nil
         // Already running with the camera in it: there is nothing to relaunch.
-        if panel.agentAlive, panel.agentRun?.camera == true { launched(key, camera: true); return }
+        if panel.agentInside, panel.agentRun?.camera == true { launched(key, camera: true); return }
         DispatchQueue.global(qos: .userInitiated).async {
             // The app must not stop at the permission alert: the camera it will see is ours.
             _ = try? Simctl.run(["privacy", udid, "grant", "camera", bundleID])
@@ -454,7 +454,7 @@ enum AgentLauncher {
     /// app does, passing on what the app writes to standard output and error; `output` gets that text as it
     /// comes, and `ended` is called when the app is gone. A terminal is lent to simctl because an app writing
     /// to a pipe keeps its lines to itself until its buffer fills, and writing to a terminal sends each at once.
-    static func launch(udid: String, bundleID: String, environment extra: [String: String], arguments: [String] = [],
+    static func launch(udid: String, bundleID: String, environment extra: [String: String], arguments: [String] = [], inject: Bool = true,
                        output: @escaping (Data) -> Void = { _ in }, ended: @escaping () -> Void = {}) -> (pid: Int32?, failure: String?) {
         guard let agent = Bundle.main.resourceURL?.appendingPathComponent("SaguruAgent.dylib"),
               FileManager.default.fileExists(atPath: agent.path) else {
@@ -464,7 +464,7 @@ enum AgentLauncher {
         guard openpty(&near, &far, nil, nil, nil) == 0 else { return (nil, "No se pudo abrir un terminal para la app.") }
         let process = Simctl.process(["launch", "--console-pty", "--terminate-running-process", udid, bundleID] + arguments)
         var environment = ProcessInfo.processInfo.environment
-        environment["SIMCTL_CHILD_DYLD_INSERT_LIBRARIES"] = agent.path
+        if inject { environment["SIMCTL_CHILD_DYLD_INSERT_LIBRARIES"] = agent.path }
         for (name, value) in extra { environment["SIMCTL_CHILD_\(name)"] = value }
         process.environment = environment
         let errors = Pipe()

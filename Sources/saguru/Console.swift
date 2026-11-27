@@ -48,6 +48,10 @@ final class ConsoleModel: ObservableObject {
     /// Everything the system logs for the process, not only what the app prints and its errors.
     @Published var showSystem = false { didSet { dirty = true } }
     @Published private(set) var appName = ""
+    /// The crash report is still being looked for: the stack may yet arrive.
+    @Published private(set) var waiting = false
+    /// The run that ended had nothing of Saguru's in it.
+    @Published private(set) var plain = false
 
     unowned let panel: PanelModel
     private var rest = Data()
@@ -105,12 +109,13 @@ final class ConsoleModel: ObservableObject {
     }
 
     /// The app is running: follow the system log for its process.
-    func launched(pid: Int32, udid: String, name: String) {
+    func launched(pid: Int32, udid: String, name: String, plain: Bool = false) {
+        self.plain = plain
         self.pid = pid
         self.udid = udid
         appName = name
         launchedAt = Date()
-        add("\(name) lanzada por Saguru · proceso \(pid)", .note)
+        add("\(name) lanzada por Saguru · proceso \(pid)\(plain ? " · app intacta, sin nada de Saguru dentro" : "")", .note)
         let process = Simctl.process(["spawn", udid, "log", "stream", "--style", "compact", "--level", "info", "--predicate", "processIdentifier == \(pid)"])
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -147,7 +152,9 @@ final class ConsoleModel: ObservableObject {
         }
         if !said.isEmpty { show(CrashReport(title: "Error fatal", reason: said, frames: [], file: nil)) }
 
+        waiting = true
         DispatchQueue.global(qos: .userInitiated).async {
+            defer { DispatchQueue.main.async { if self.session == mine { self.waiting = false } } }
             // The report macOS writes: up to about a minute for it to appear.
             var report: CrashReport?
             for attempt in 0..<45 {
@@ -187,6 +194,24 @@ final class ConsoleModel: ObservableObject {
         return tail.suffix(3).joined(separator: "\n")
     }
 
+    /// What a fatal signal usually means, in words a person can act on.
+    static func meaning(of signal: String) -> String {
+        switch signal {
+        case "SIGSEGV", "SIGBUS":
+            return "Acceso a memoria inválido (EXC_BAD_ACCESS): se usó un objeto ya liberado, un puntero nulo o memoria que no era suya. No deja mensaje; el dónde está en la pila. Suele venir de código unsafe, de C u Objective-C, de una librería, o de un objeto usado desde dos hilos a la vez."
+        case "SIGTRAP":
+            return "El runtime de Swift detuvo la app: un fatalError, un opcional forzado que era nil, un índice fuera de rango o un desbordamiento."
+        case "SIGABRT":
+            return "La app se abortó a sí misma: una excepción sin atrapar, un assert o una comprobación del sistema que falló."
+        case "SIGILL":
+            return "Instrucción inválida: normalmente una comprobación del runtime que falló."
+        case "SIGKILL":
+            return "El sistema o una herramienta la mató sin darle ocasión de responder."
+        default:
+            return "El proceso recibió la señal \(signal)."
+        }
+    }
+
     /// How SpringBoard recorded the end of the process: "domain:signal(2) code:SIGABRT(6)", "domain:tcc(11) code:0"…
     static func exitStatus(pid: Int32, udid: String) -> (title: String, reason: String, failure: Bool)? {
         let predicate = "process == \"SpringBoard\" AND subsystem == \"com.apple.FrontBoard\" AND eventMessage CONTAINS \"Process exited\" AND eventMessage CONTAINS \":\(pid)]\""
@@ -203,7 +228,7 @@ final class ConsoleModel: ObservableObject {
         case "frontboard", "springboard": return ("Cierre pedido", "la cerró el usuario, Saguru u otra herramienta", false)
         case "jetsam": return ("Sin memoria", "El sistema la cerró por usar demasiada memoria (\(what)).", true)
         case "watchdog", "runningboard": return ("Cerrada por el sistema", "El sistema la cerró: tardó demasiado en responder o incumplió una regla (\(domain) \(code)).", true)
-        case "signal": return ("Señal \(what)", "El proceso recibió la señal \(what).", !["SIGKILL", "SIGTERM"].contains(what))
+        case "signal": return ("Señal \(what)", meaning(of: what), !["SIGKILL", "SIGTERM"].contains(what))
         default: return ("Terminó", "salió con \(domain) \(code)", false)
         }
     }
@@ -272,6 +297,7 @@ final class ConsoleModel: ObservableObject {
         var reasons: [String] = []
         for (_, said) in (body["asi"] as? [String: Any]) ?? [:] { reasons += (said as? [String]) ?? [] }
         if let subtype = exception["subtype"] as? String { reasons.append(subtype) }
+        if let signal = exception["signal"] as? String { reasons.append(meaning(of: signal)) }
         if reasons.isEmpty, let end = body["termination"] as? [String: Any], let why = end["indicator"] as? String { reasons.append(why) }
 
         let images = (body["usedImages"] as? [[String: Any]]) ?? []
@@ -315,6 +341,8 @@ struct ConsoleView: View {
                         .help("Incluye todo lo que el sistema registra para la app, no solo lo que imprime y sus errores")
                     Button("Copiar") { copy(visible().map(\.text).joined(separator: "\n")) }.disabled(console.lines.isEmpty)
                     Button("Limpiar") { console.clear() }.disabled(console.lines.isEmpty)
+                    Toggle("App intacta", isOn: $panel.plainLaunch).toggleStyle(.checkbox)
+                        .help("Lanza la app sin nada de Saguru dentro (sin cámara ni red), para descartar que un cierre venga de Saguru")
                     Button(panel.agentAlive ? "Relanzar" : "Lanzar con registro") { launch() }.disabled(panel.app == nil)
                 }
                 .controlSize(.small)
@@ -327,7 +355,7 @@ struct ConsoleView: View {
     }
 
     private func launch() {
-        panel.launchWithAgent { failure in if let failure { panel.say(failure) } }
+        panel.launchWithAgent(plain: panel.plainLaunch) { failure in if let failure { panel.say(failure) } }
     }
 
     private func copy(_ text: String) {
@@ -391,6 +419,19 @@ struct ConsoleView: View {
                 if wholeStack && frames.count > 12 { ScrollView { list }.frame(height: 200) } else { list }
                 Button(wholeStack ? "Solo el código de la app" : "Ver la pila completa") { wholeStack.toggle() }
                     .buttonStyle(.borderless).controlSize(.small)
+            } else if console.waiting {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Buscando el informe de macOS con la pila; en una app grande tarda hasta un minuto…")
+                }
+                .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("macOS no dejó un informe con la pila para este cierre. Míralo en ~/Library/Logs/DiagnosticReports o en la app Consola › Informes de fallos.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if !console.plain {
+                Text("¿Es tu app o es Saguru? Marca «App intacta» y relanza: si sin Saguru dentro no se cierra, el fallo es nuestro y nos interesa el informe.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(12)
