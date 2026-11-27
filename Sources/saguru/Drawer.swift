@@ -77,6 +77,26 @@ struct BackdropView: View {
 /// Borderless windows refuse the keyboard by default; the panel has text fields.
 final class KeyPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    /// Saguru has no menu bar, and a panel can hold the keyboard while another app is in front, so the
+    /// editing shortcuts are handed to whatever field is being typed in rather than left to a menu.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if super.performKeyEquivalent(with: event) { return true }
+        let keys = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard keys == .command || keys == [.command, .shift], let key = event.charactersIgnoringModifiers?.lowercased() else { return false }
+        let action: Selector?
+        switch (key, keys.contains(.shift)) {
+        case ("x", false): action = #selector(NSText.cut(_:))
+        case ("c", false): action = #selector(NSText.copy(_:))
+        case ("v", false): action = #selector(NSText.paste(_:))
+        case ("a", false): action = #selector(NSText.selectAll(_:))
+        case ("z", false): action = Selector(("undo:"))
+        case ("z", true): action = Selector(("redo:"))
+        default: action = nil
+        }
+        guard let action else { return false }
+        return NSApp.sendAction(action, to: nil, from: self)
+    }
 }
 
 /// Where the panel opens: the permission Saguru needs, the app everything applies to, and that app's details.

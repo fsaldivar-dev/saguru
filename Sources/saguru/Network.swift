@@ -427,7 +427,7 @@ final class NetworkWindow: NSObject, NSWindowDelegate {
     }
 
     /// Saguru has no menu bar of its own; without an Edit menu, ⌘C, ⌘V and ⌘A do nothing in a window.
-    private static func installEditMenu() {
+    static func installEditMenu() {
         guard NSApp.mainMenu == nil else { return }
         let main = NSMenu()
         let appItem = NSMenuItem()
@@ -437,6 +437,7 @@ final class NetworkWindow: NSObject, NSWindowDelegate {
         let editItem = NSMenuItem()
         let edit = NSMenu(title: "Edición")
         edit.addItem(withTitle: "Deshacer", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Rehacer", action: Selector(("redo:")), keyEquivalent: "Z")
         edit.addItem(withTitle: "Cortar", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         edit.addItem(withTitle: "Copiar", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         edit.addItem(withTitle: "Pegar", action: #selector(NSText.paste(_:)), keyEquivalent: "v")

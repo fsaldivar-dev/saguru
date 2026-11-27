@@ -51,6 +51,7 @@ final class PanelController: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NetworkWindow.installEditMenu()
         // The Simulator's chrome is dark in both system appearances; popovers, menus and dialogs follow it.
         NSApp.appearance = NSAppearance(named: .darkAqua)
         (rail, railHost) = makePanel(RailView(model: model))
