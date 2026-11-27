@@ -87,7 +87,10 @@ Prepare one case per picture (an ID, something that is not one, a cropped one) a
   <img src="assets/giroscopio.gif" alt="Several pictures and a gyroscope to rotate and tilt what the app sees" width="820">
 </p>
 
-**iPhone over the cable, with no Wi-Fi and no iCloud.** Apple's Continuity Camera requires the same iCloud account on the iPhone and the Mac. Saguru ships its own iPhone app, Saguru Cámara, which sends the camera through the USB cable: install it once with `scripts/install-companion.sh <TEAM_ID>`, open it on the phone, and "iPhone por USB" appears in the panel, with the back or the front camera. The video travels through the same tunnel Xcode uses with the iPhone.
+**iPhone over the cable, with no Wi-Fi and no iCloud.** Apple's Continuity Camera requires the same iCloud account on the iPhone and the Mac. Saguru offers two ways that do not:
+
+- **Nothing to install: the iPhone's screen.** Plug in the cable, tap "Trust" and open the Camera app on the phone. "Pantalla de (your iPhone)" appears in the panel: Saguru receives the screen the way QuickTime does and crops it to the viewfinder, without the buttons. It is the closest iOS allows to what Android does: an iPhone will not run anything that is not an installed app.
+- **The camera itself, with the Saguru Cámara app.** It gives the camera's picture without going through the screen, and lets you pick the back or front camera from the panel. Install it once with `scripts/install-companion.sh <TEAM_ID>`; it shows up as "iPhone por USB".
 
 Plug in a camera, an iPhone or an Android phone while the tool is open and it shows up in the list by itself, marked as new; if the Android phone still has to accept USB debugging, Saguru says so right there.
 

@@ -2,6 +2,7 @@ import AVFoundation
 import AppKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import CoreMediaIO
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -56,6 +57,8 @@ struct CameraDevice: Identifiable, Hashable {
     var isAndroid = false
     /// An iPhone reached through the cable, running Saguru's companion app.
     var isCable = false
+    /// An iPhone's screen, received through the cable the way QuickTime does: no account and nothing to install.
+    var isScreen = false
     /// What is missing before it can be used (a phone that has not accepted USB debugging yet); nil when ready.
     var pending: String?
 }
@@ -105,6 +108,12 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     private var session: AVCaptureSession?
     private var android: AndroidCamera?
     private var cable: CableCamera?
+    /// With an iPhone's screen as the source: keep only the Camera app's viewfinder, without its buttons.
+    @Published var cropScreen = true
+    private var screenSource = false
+    private var viewfinder: CGRect?
+    private var screenFrames = 0
+    private static var screensAllowed = false
     /// Which of the iPhone's cameras the companion app sends.
     @Published var cableLens = CableCamera.Lens.back { didSet { if cableLens != oldValue { queue.async { self.cable?.choose(self.cableLens) } } } }
     private let queue = DispatchQueue(label: "saguru.camera")
@@ -176,7 +185,19 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     func reloadDevices() {
         let found = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
                                                      mediaType: .video, position: .unspecified).devices
-        let cameras = found.map { CameraDevice(id: $0.uniqueID, name: $0.localizedName, isPhone: $0.deviceType == .continuityCamera || $0.modelID.hasPrefix("iPhone")) }
+        var cameras = found.map { CameraDevice(id: $0.uniqueID, name: $0.localizedName, isPhone: $0.deviceType == .continuityCamera || $0.modelID.hasPrefix("iPhone")) }
+        // iPhones and iPads on a cable offer their screen to any Mac they trust, once the process asks to see
+        // such devices (this is what QuickTime's "new movie recording" does). They show up a moment later.
+        if !Self.screensAllowed {
+            Self.screensAllowed = true
+            var address = CMIOObjectPropertyAddress(mSelector: CMIOObjectPropertySelector(kCMIOHardwarePropertyAllowScreenCaptureDevices),
+                                                    mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal), mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
+            var allow: UInt32 = 1
+            CMIOObjectSetPropertyData(CMIOObjectID(kCMIOObjectSystemObject), &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &allow)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.reloadDevices() }
+        }
+        cameras += AVCaptureDevice.DiscoverySession(deviceTypes: [.external], mediaType: .muxed, position: .unspecified).devices
+            .map { CameraDevice(id: $0.uniqueID, name: "Pantalla de \($0.localizedName)", isPhone: true, isScreen: true) }
         show(cameras + devices.filter { $0.isAndroid || $0.isCable })
         reloadPhones()
     }
@@ -294,6 +315,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         let wanted: String? = { if case .device(let id) = source, looking { return id } else { return nil } }()
         let phone: String? = { if case .android(let serial) = source, looking { return serial } else { return nil } }()
         let wired: String? = { if case .cable(let id) = source, looking { return id } else { return nil } }()
+        let screen = devices.first { $0.id == wanted }?.isScreen ?? false
         queue.async {
             self.session?.stopRunning()
             self.session = nil
@@ -324,7 +346,11 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
                 return
             }
             let session = AVCaptureSession()
-            session.sessionPreset = .hd1280x720
+            // A phone's screen comes in its own size; a camera is asked for a modest one.
+            if !screen { session.sessionPreset = .hd1280x720 }
+            self.screenSource = screen
+            self.viewfinder = nil
+            self.screenFrames = 0
             guard session.canAddInput(input) else { return }
             session.addInput(input)
             let output = AVCaptureVideoDataOutput()
@@ -418,6 +444,38 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         }
     }
 
+    /// The band of a phone's screen that shows the scene, when the Camera app is in front: the rows that are
+    /// not mostly black. Nil when the whole screen is picture, or when it is too dark to tell.
+    static func findViewfinder(in picture: CIImage, with context: CIContext) -> CGRect? {
+        let extent = picture.extent
+        guard extent.width > 10, extent.height > 10 else { return nil }
+        let columns = 48, rows = 160
+        let small = picture.transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
+            .transformed(by: CGAffineTransform(scaleX: CGFloat(columns) / extent.width, y: CGFloat(rows) / extent.height))
+        var pixels = [UInt8](repeating: 0, count: columns * rows * 4)
+        context.render(small, toBitmap: &pixels, rowBytes: columns * 4, bounds: CGRect(x: 0, y: 0, width: columns, height: rows),
+                       format: .BGRA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
+        // A row belongs to a band when nearly all of it is black (a button or two aside). Rows come top first.
+        let lit = (0..<rows).map { row -> Bool in
+            var dark = 0
+            for column in 0..<columns {
+                let at = (row * columns + column) * 4
+                if Int(pixels[at]) + Int(pixels[at + 1]) + Int(pixels[at + 2]) < 60 { dark += 1 }
+            }
+            return dark < columns * 6 / 10
+        }
+        var best = (start: 0, length: 0), start = -1
+        for row in 0...rows {
+            if row < rows, lit[row] { if start < 0 { start = row } }
+            else if start >= 0 { if row - start > best.length { best = (start, row - start) }; start = -1 }
+        }
+        // Too little to be a viewfinder, or the whole screen: leave the picture as it is.
+        guard best.length >= rows / 4, best.length < rows * 97 / 100 else { return nil }
+        let top = CGFloat(best.start) / CGFloat(rows), tall = CGFloat(best.length) / CGFloat(rows)
+        // Core Image counts from the bottom.
+        return CGRect(x: extent.minX, y: extent.minY + (1 - top - tall) * extent.height, width: extent.width, height: tall * extent.height).integral
+    }
+
     /// The picture decoded once, no larger than is useful, so moving a slider does not read the file again.
     private func loadStill(_ url: URL) -> CIImage? {
         if let still, still.url == url { return still.image }
@@ -431,6 +489,13 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     /// Crops and scales a picture to what the app will get, publishes it to the agent and to the panel.
     private func send(_ image: CIImage) {
         var picture = image
+        if screenSource, cropScreen {
+            // The Camera app's viewfinder sits between two dark bands with its buttons; where it is, is looked
+            // for now and then, since it moves when the app changes mode.
+            if screenFrames % 20 == 0 { viewfinder = Self.findViewfinder(in: picture, with: context) ?? viewfinder }
+            screenFrames += 1
+            if let viewfinder { picture = picture.cropped(to: viewfinder) }
+        }
         let orientations: [CGImagePropertyOrientation] = [.up, .right, .down, .left]
         if turns % 4 != 0 { picture = picture.oriented(orientations[turns % 4]) }
         picture = picture.transformed(by: CGAffineTransform(translationX: -picture.extent.minX, y: -picture.extent.minY))
@@ -577,12 +642,16 @@ struct CameraForm: View {
                                 if camera.imageURL == nil { camera.pickImage() } else { camera.source = .image }
                             }
                             ForEach(camera.devices) { device in
-                                row(device.name, detail: device.pending ?? (device.isCable ? "Por cable, sin wifi ni iCloud" : device.isAndroid ? "Android por USB" : (device.isPhone ? "iPhone como cámara" : "Cámara de esta Mac")),
+                                row(device.name, detail: device.pending ?? (device.isScreen ? "Por cable, sin iCloud ni app: abre Cámara en el iPhone" : device.isCable ? "Por cable, con la app Saguru Cámara" : device.isAndroid ? "Android por USB" : (device.isPhone ? "iPhone como cámara" : "Cámara de esta Mac")),
                                     symbol: device.isAndroid ? "smartphone" : (device.isPhone ? "iphone" : "web.camera"),
                                     new: camera.fresh.contains(device.id), waiting: device.pending != nil,
                                     chosen: camera.source == (device.isCable ? .cable(device.id) : device.isAndroid ? .android(device.id) : .device(device.id))) { camera.choose(device) }
                             }
                         }
+                    }
+                    if case .device(let id) = camera.source, camera.devices.contains(where: { $0.id == id && $0.isScreen }) {
+                        Toggle("Recortar al visor de la app Cámara", isOn: $camera.cropScreen).toggleStyle(.checkbox)
+                            .help("Deja solo la imagen de la cámara del iPhone, sin los botones de su app")
                     }
                     if case .cable = camera.source {
                         Labeled("Cámara del iPhone") {
@@ -669,6 +738,7 @@ struct CameraForm: View {
         "Video grabado; zoom, linterna y enfoque se aceptan pero no cambian la imagen",
         "La frontal muestra la misma fuente que la trasera",
         "Android: solo cámara trasera, Android 12 o posterior",
+        "Pantalla del iPhone: es su pantalla, con la app Cámara abierta; de noche el recorte puede fallar",
         "iPhone por USB: necesita la app Saguru Cámara abierta en el teléfono",
     ]
 
