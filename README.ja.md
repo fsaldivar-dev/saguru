@@ -89,10 +89,7 @@ Saguru からアプリを起動すると、アプリの出力（`print`、`NSLog
   <img src="assets/giroscopio.gif" alt="複数の画像と、アプリに見せる映像を回転・傾けるジャイロ" width="820">
 </p>
 
-**ケーブルで iPhone を使う。Wi-Fi も iCloud も不要。**Apple の連係カメラは、iPhone と Mac で同じ iCloud アカウントが必要です。Saguru には、アカウントのいらない方法が 2 つあります。
-
-- **何もインストールしない：iPhone の画面。**ケーブルをつなぎ、「信頼」をタップして、iPhone でカメラアプリを開きます。パネルに「Pantalla de（あなたの iPhone）」が現れ、Saguru は QuickTime と同じ方法で画面を受け取り、ボタンを除いたファインダー部分だけを切り出します。iOS で許される範囲では、これが Android に最も近いやり方です。iPhone はインストールされたアプリ以外を実行できません。
-- **カメラを直接：Saguru Cámara アプリ。**画面を経由せずにカメラの映像を送り、パネルから背面・前面を選べます。`scripts/install-companion.sh <TEAM_ID>` で一度インストールすると、「iPhone por USB」として表示されます。
+**ケーブルで iPhone を使う。Wi-Fi も iCloud も不要。**Apple の連係カメラは、iPhone と Mac で同じ iCloud アカウントが必要です。Saguru は iPhone の画面を使うことで、このアカウントを回避します。ケーブルをつなぎ、「信頼」をタップして、iPhone でカメラアプリを開きます。パネルに「Pantalla de（あなたの iPhone）」が現れ、Saguru は QuickTime と同じ方法で画面を受け取り、ボタンを除いたファインダー部分だけを切り出します。何もインストールしません。iOS で許される範囲では、これが Android に最も近いやり方です。iPhone はインストールされたアプリ以外を実行できないためです。
 
 ツールを開いたままカメラ、iPhone、Android 端末を接続すると、自動的に一覧に現れて「新規」と表示されます。Android 側で USB デバッグの許可がまだなら、Saguru がその場で知らせます。
 

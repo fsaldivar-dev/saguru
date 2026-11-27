@@ -117,15 +117,10 @@ Todo eso también se aplica a las cámaras en vivo.
 </p>
 
 **iPhone por cable, sin wifi ni iCloud.** La Cámara de Continuidad de Apple exige la misma cuenta de iCloud en el
-iPhone y en la Mac. Saguru ofrece dos caminos que no:
-
-- **Sin instalar nada: la pantalla del iPhone.** Conecta el cable, pulsa «Confiar» y abre la app Cámara en el
-  teléfono. En el panel aparece «Pantalla de (tu iPhone)»: Saguru recibe la pantalla como lo hace QuickTime y
-  recorta el visor, sin los botones. Es lo más parecido a lo de Android que iOS permite: un iPhone no deja ejecutar
-  nada que no sea una app instalada.
-- **La cámara directa, con la app Saguru Cámara.** Da la imagen de la cámara sin pasar por la pantalla y permite
-  elegir trasera o frontal desde el panel. Se instala una vez con `scripts/install-companion.sh <TEAM_ID>` y aparece
-  como «iPhone por USB».
+iPhone y en la Mac. Saguru evita esa cuenta usando la pantalla del iPhone: conecta el cable, pulsa «Confiar» y abre
+la app Cámara en el teléfono. En el panel aparece «Pantalla de (tu iPhone)»: Saguru recibe la pantalla como lo hace
+QuickTime y recorta el visor, sin los botones. Sin instalar nada: es lo más parecido a lo de Android que iOS
+permite, porque un iPhone no deja ejecutar nada que no sea una app instalada.
 
 Si conectas una cámara, un iPhone o un Android con la herramienta abierta, aparece sola en la lista, marcada como nueva; si al Android le falta aceptar la depuración USB, Saguru te lo dice ahí mismo.
 

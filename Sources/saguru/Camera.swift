@@ -55,8 +55,6 @@ struct CameraDevice: Identifiable, Hashable {
     let isPhone: Bool
     /// An Android phone reached through adb rather than a camera macOS lists.
     var isAndroid = false
-    /// An iPhone reached through the cable, running Saguru's companion app.
-    var isCable = false
     /// An iPhone's screen, received through the cable the way QuickTime does: no account and nothing to install.
     var isScreen = false
     /// What is missing before it can be used (a phone that has not accepted USB debugging yet); nil when ready.
@@ -64,7 +62,7 @@ struct CameraDevice: Identifiable, Hashable {
 }
 
 final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-    enum Source: Hashable { case image, device(String), android(String), cable(String) }
+    enum Source: Hashable { case image, device(String), android(String) }
     /// How the picture fills the frame the app asked for: cut to cover it, or shown whole with black around.
     enum Framing: String, CaseIterable { case fill = "Rellenar", fit = "Completa" }
 
@@ -107,15 +105,12 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     private(set) var channel: FrameChannel?
     private var session: AVCaptureSession?
     private var android: AndroidCamera?
-    private var cable: CableCamera?
     /// With an iPhone's screen as the source: keep only the Camera app's viewfinder, without its buttons.
     @Published var cropScreen = true
     private var screenSource = false
     private var viewfinder: CGRect?
     private var screenFrames = 0
     private static var screensAllowed = false
-    /// Which of the iPhone's cameras the companion app sends.
-    @Published var cableLens = CableCamera.Lens.back { didSet { if cableLens != oldValue { queue.async { self.cable?.choose(self.cableLens) } } } }
     private let queue = DispatchQueue(label: "saguru.camera")
     private let context = CIContext()
     private var frames = 0
@@ -198,7 +193,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         }
         cameras += AVCaptureDevice.DiscoverySession(deviceTypes: [.external], mediaType: .muxed, position: .unspecified).devices
             .map { CameraDevice(id: $0.uniqueID, name: tr("Pantalla de %@", "\($0.localizedName)"), isPhone: true, isScreen: true) }
-        show(cameras + devices.filter { $0.isAndroid || $0.isCable })
+        show(cameras + devices.filter(\.isAndroid))
         reloadPhones()
     }
 
@@ -209,17 +204,8 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
                              pending: phone.ready ? nil : (phone.state == "offline" ? "Sin conexión: vuelve a conectar el cable"
                                                                                       : tr("Acepta «Permitir depuración USB» en el teléfono")))
             }
-            // iPhones on a cable. Whether the companion app is open is asked of the ones not in use, so the
-            // one sending is not disturbed.
-            let inUse: String? = { if case .cable(let id) = self.source { return id } else { return nil } }()
-            let iphones = USBMux.phones().map { phone -> CameraDevice in
-                let id = "usb:" + phone.serial
-                let open = id == inUse || CableCamera.isListening(serial: phone.serial)
-                return CameraDevice(id: id, name: tr("iPhone por USB"), isPhone: true, isCable: true,
-                                    pending: open ? nil : tr("Abre la app Saguru Cámara en el iPhone"))
-            }
             DispatchQueue.main.async {
-                self.show(self.devices.filter { !$0.isAndroid && !$0.isCable } + iphones + phones)
+                self.show(self.devices.filter { !$0.isAndroid } + phones)
                 self.listed = true
             }
         }
@@ -245,12 +231,11 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
             }
             for gone in before where !list.contains(where: { $0.id == gone.id }) {
                 fresh.remove(gone.id)
-                if source == .device(gone.id) || source == .android(gone.id) || source == .cable(gone.id) { panel.say(tr("Se desconectó %@: vuelvo a la imagen", "\(gone.name)")) }
+                if source == .device(gone.id) || source == .android(gone.id) { panel.say(tr("Se desconectó %@: vuelvo a la imagen", "\(gone.name)")) }
             }
         }
         switch source {
-        case .device(let id) where !list.contains(where: { $0.id == id && !$0.isAndroid && !$0.isCable }): source = .image
-        case .cable(let id) where !list.contains(where: { $0.id == id && $0.isCable }): source = .image
+        case .device(let id) where !list.contains(where: { $0.id == id && !$0.isAndroid }): source = .image
         case .android(let serial) where !list.contains(where: { $0.id == serial && $0.isAndroid && $0.pending == nil }): source = .image
         default: break
         }
@@ -314,24 +299,12 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         let looking = visible || active != nil
         let wanted: String? = { if case .device(let id) = source, looking { return id } else { return nil } }()
         let phone: String? = { if case .android(let serial) = source, looking { return serial } else { return nil } }()
-        let wired: String? = { if case .cable(let id) = source, looking { return id } else { return nil } }()
         let screen = devices.first { $0.id == wanted }?.isScreen ?? false
         queue.async {
             self.session?.stopRunning()
             self.session = nil
             self.android?.stop()
             self.android = nil
-            self.cable?.stop()
-            self.cable = nil
-            if let wired {
-                let camera = CableCamera(serial: String(wired.dropFirst(4)), queue: self.queue)
-                camera.onFrame = { [weak self] pixels in self?.send(CIImage(cvPixelBuffer: pixels)) }
-                camera.onProblem = { [weak self] message in DispatchQueue.main.async { self?.problem = message } }
-                self.cable = camera
-                camera.start()
-                if self.cableLens != .back { self.queue.asyncAfter(deadline: .now() + 0.8) { camera.choose(self.cableLens) } }
-                return
-            }
             if let phone {
                 let camera = AndroidCamera(serial: phone, queue: self.queue)
                 camera.onFrame = { [weak self] pixels in self?.send(CIImage(cvPixelBuffer: pixels)) }
@@ -362,7 +335,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
             self.session = session
             session.startRunning()
         }
-        if wanted == nil, phone == nil, wired == nil { renderImage() }
+        if wanted == nil, phone == nil { renderImage() }
     }
 
     func choose(_ device: CameraDevice) {
@@ -370,7 +343,6 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         fresh.remove(device.id)
         if let pending = device.pending { problem = tr("%@ aún no se puede usar. %@.", "\(device.name)", "\(pending)"); return }
         if device.isAndroid { source = .android(device.id); return }
-        if device.isCable { source = .cable(device.id); return }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             source = .device(device.id)
@@ -642,25 +614,16 @@ struct CameraForm: View {
                                 if camera.imageURL == nil { camera.pickImage() } else { camera.source = .image }
                             }
                             ForEach(camera.devices) { device in
-                                row(device.name, detail: device.pending ?? (device.isScreen ? "Por cable, sin iCloud ni app: abre Cámara en el iPhone" : device.isCable ? "Por cable, con la app Saguru Cámara" : device.isAndroid ? "Android por USB" : (device.isPhone ? "iPhone como cámara" : tr("Cámara de esta Mac"))),
+                                row(device.name, detail: device.pending ?? (device.isScreen ? "Por cable, sin iCloud: abre Cámara en el iPhone" : device.isAndroid ? "Android por USB" : (device.isPhone ? "iPhone como cámara" : tr("Cámara de esta Mac"))),
                                     symbol: device.isAndroid ? "smartphone" : (device.isPhone ? "iphone" : "web.camera"),
                                     new: camera.fresh.contains(device.id), waiting: device.pending != nil,
-                                    chosen: camera.source == (device.isCable ? .cable(device.id) : device.isAndroid ? .android(device.id) : .device(device.id))) { camera.choose(device) }
+                                    chosen: camera.source == (device.isAndroid ? .android(device.id) : .device(device.id))) { camera.choose(device) }
                             }
                         }
                     }
                     if case .device(let id) = camera.source, camera.devices.contains(where: { $0.id == id && $0.isScreen }) {
                         Toggle("Recortar al visor de la app Cámara", isOn: $camera.cropScreen).toggleStyle(.checkbox)
                             .help("Deja solo la imagen de la cámara del iPhone, sin los botones de su app")
-                    }
-                    if case .cable = camera.source {
-                        Labeled("Cámara del iPhone") {
-                            Picker("Cámara del iPhone", selection: $camera.cableLens) {
-                                Text("Trasera").tag(CableCamera.Lens.back)
-                                Text("Frontal").tag(CableCamera.Lens.front)
-                            }
-                            .pickerStyle(.segmented).labelsHidden()
-                        }
                     }
                     Labeled("Encuadre") {
                         Picker("Encuadre", selection: $camera.framing) {
@@ -739,7 +702,6 @@ struct CameraForm: View {
         "La frontal muestra la misma fuente que la trasera",
         "Android: solo cámara trasera, Android 12 o posterior",
         "Pantalla del iPhone: es su pantalla, con la app Cámara abierta; de noche el recorte puede fallar",
-        "iPhone por USB: necesita la app Saguru Cámara abierta en el teléfono",
     ]
 
     // MARK: Handles on the picture, as in a shape editor
