@@ -101,6 +101,8 @@ Todo eso también se aplica a las cámaras en vivo.
   <img src="assets/giroscopio.gif" alt="Varias imágenes y un giroscopio para girar e inclinar lo que ve la app" width="820">
 </p>
 
+Si conectas una cámara, un iPhone o un Android con la herramienta abierta, aparece sola en la lista, marcada como nueva; si al Android le falta aceptar la depuración USB, Saguru te lo dice ahí mismo.
+
 <p align="center">
   <img src="assets/camara.gif" alt="La app del simulador recibe una cámara, lee un QR y toma una foto" width="820">
 </p>

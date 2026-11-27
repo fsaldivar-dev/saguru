@@ -83,6 +83,8 @@ saguru
   <img src="assets/giroscopio.gif" alt="多张图片，以及用来旋转和倾斜画面的陀螺仪" width="820">
 </p>
 
+在工具打开时接入摄像头、iPhone 或 Android 手机，它会自动出现在列表中并标记为“新”；如果 Android 手机还没有允许 USB 调试，Saguru 会直接在那里提示。
+
 <p align="center">
   <img src="assets/camara.gif" alt="模拟器中的应用获得相机，识别二维码并拍照" width="820">
 </p>

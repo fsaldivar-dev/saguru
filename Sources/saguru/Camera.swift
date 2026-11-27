@@ -54,6 +54,8 @@ struct CameraDevice: Identifiable, Hashable {
     let isPhone: Bool
     /// An Android phone reached through adb rather than a camera macOS lists.
     var isAndroid = false
+    /// What is missing before it can be used (a phone that has not accepted USB debugging yet); nil when ready.
+    var pending: String?
 }
 
 final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -66,6 +68,10 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     /// Quarter turns to the right, for sources that arrive lying on their side.
     @Published var turns = 0 { didSet { if turns != oldValue { renderImage() } } }
     @Published var devices: [CameraDevice] = []
+    /// Cameras that appeared while the tool was open, marked until one is chosen or a while passes.
+    @Published private(set) var fresh = Set<String>()
+    private var listed = false
+    private var watch: Timer?
     @Published var preview: CGImage?
     @Published var imageURL: URL? { didSet { renderImage() } }
     /// The pictures at hand: one is sent, and clicking another swaps it while the app keeps running.
@@ -90,7 +96,7 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     @Published var problem: String?
     /// "udid|bundle" of the app that was launched with the camera.
     @Published private(set) var active: String?
-    @Published var visible = false { didSet { if visible != oldValue { restart() } } }
+    @Published var visible = false { didSet { if visible != oldValue { restart(); watchDevices() } } }
 
     unowned let panel: PanelModel
     private(set) var channel: FrameChannel?
@@ -160,19 +166,74 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         restart()
     }
 
+    /// The cameras this Mac lists (its own, an iPhone nearby or plugged in, a USB webcam) and the Android
+    /// phones adb sees. Called when the tool opens and again whenever something is plugged in or out.
     func reloadDevices() {
         let found = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera, .external, .continuityCamera],
                                                      mediaType: .video, position: .unspecified).devices
-        devices = found.map { CameraDevice(id: $0.uniqueID, name: $0.localizedName, isPhone: $0.deviceType == .continuityCamera || $0.modelID.hasPrefix("iPhone")) }
-        if case .device(let id) = source, !devices.contains(where: { $0.id == id }) { source = .image }
-        DispatchQueue.global(qos: .userInitiated).async {
-            let phones = ADB.phones().map { CameraDevice(id: $0.serial, name: $0.name, isPhone: true, isAndroid: true) }
+        let cameras = found.map { CameraDevice(id: $0.uniqueID, name: $0.localizedName, isPhone: $0.deviceType == .continuityCamera || $0.modelID.hasPrefix("iPhone")) }
+        show(cameras + devices.filter(\.isAndroid))
+        reloadPhones()
+    }
+
+    private func reloadPhones() {
+        DispatchQueue.global(qos: .utility).async {
+            let phones = ADB.phones().map { phone in
+                CameraDevice(id: phone.serial, name: phone.name, isPhone: true, isAndroid: true,
+                             pending: phone.ready ? nil : (phone.state == "offline" ? "Sin conexión: vuelve a conectar el cable"
+                                                                                      : "Acepta «Permitir depuración USB» en el teléfono"))
+            }
             DispatchQueue.main.async {
-                self.devices = self.devices.filter { !$0.isAndroid } + phones
-                if case .android(let serial) = self.source, !phones.contains(where: { $0.id == serial }) { self.source = .image }
+                self.show(self.devices.filter { !$0.isAndroid } + phones)
+                self.listed = true
             }
         }
     }
+
+    /// Takes a new list, says what arrived or left, and falls back to the image if the source in use is gone.
+    private func show(_ list: [CameraDevice]) {
+        guard list != devices else { return }
+        let before = devices
+        devices = list
+        if listed {
+            for device in list {
+                let was = before.first { $0.id == device.id }
+                if was == nil {
+                    fresh.insert(device.id)
+                    panel.say(device.pending == nil ? "Se conectó \(device.name): elígela en Fuente para usarla" : "\(device.name) conectado. \(device.pending!)")
+                    let id = device.id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 30) { self.fresh.remove(id) }
+                } else if was?.pending != nil, device.pending == nil {
+                    fresh.insert(device.id)
+                    panel.say("\(device.name) ya está listo para usarse como cámara")
+                }
+            }
+            for gone in before where !list.contains(where: { $0.id == gone.id }) {
+                fresh.remove(gone.id)
+                if source == .device(gone.id) || source == .android(gone.id) { panel.say("Se desconectó \(gone.name): vuelvo a la imagen") }
+            }
+        }
+        switch source {
+        case .device(let id) where !list.contains(where: { $0.id == id && !$0.isAndroid }): source = .image
+        case .android(let serial) where !list.contains(where: { $0.id == serial && $0.isAndroid && $0.pending == nil }): source = .image
+        default: break
+        }
+    }
+
+    /// While the tool is open, macOS says when a camera comes or goes; adb does not, so phones are asked for
+    /// every few seconds.
+    private func watchDevices() {
+        watch?.invalidate()
+        watch = nil
+        NotificationCenter.default.removeObserver(self, name: AVCaptureDevice.wasConnectedNotification, object: nil)
+        NotificationCenter.default.removeObserver(self, name: AVCaptureDevice.wasDisconnectedNotification, object: nil)
+        guard visible else { return }
+        NotificationCenter.default.addObserver(self, selector: #selector(camerasChanged), name: AVCaptureDevice.wasConnectedNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(camerasChanged), name: AVCaptureDevice.wasDisconnectedNotification, object: nil)
+        watch = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.reloadPhones() }
+    }
+
+    @objc private func camerasChanged() { DispatchQueue.main.async { self.reloadDevices() } }
 
     private func ensureChannel() -> FrameChannel? {
         if channel == nil {
@@ -253,6 +314,8 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
 
     func choose(_ device: CameraDevice) {
         problem = nil
+        fresh.remove(device.id)
+        if let pending = device.pending { problem = "\(device.name) aún no se puede usar. \(pending)."; return }
         if device.isAndroid { source = .android(device.id); return }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -436,8 +499,9 @@ struct CameraForm: View {
                                 if camera.imageURL == nil { camera.pickImage() } else { camera.source = .image }
                             }
                             ForEach(camera.devices) { device in
-                                row(device.name, detail: device.isAndroid ? "Android por USB" : (device.isPhone ? "iPhone como cámara" : "Cámara de esta Mac"),
+                                row(device.name, detail: device.pending ?? (device.isAndroid ? "Android por USB" : (device.isPhone ? "iPhone como cámara" : "Cámara de esta Mac")),
                                     symbol: device.isAndroid ? "smartphone" : (device.isPhone ? "iphone" : "web.camera"),
+                                    new: camera.fresh.contains(device.id), waiting: device.pending != nil,
                                     chosen: camera.source == (device.isAndroid ? .android(device.id) : .device(device.id))) { camera.choose(device) }
                             }
                         }
@@ -744,15 +808,20 @@ struct CameraForm: View {
         }
     }
 
-    private func row(_ name: String, detail: String, symbol: String, chosen: Bool, action: @escaping () -> Void) -> some View {
+    private func row(_ name: String, detail: String, symbol: String, new: Bool = false, waiting: Bool = false, chosen: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: symbol).font(.system(size: 15)).frame(width: 22)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(name).lineLimit(1)
-                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Text(detail).font(.caption).foregroundStyle(waiting ? AnyShapeStyle(Color(nsColor: .systemOrange)) : AnyShapeStyle(.secondary))
+                        .lineLimit(waiting ? 2 : 1).truncationMode(.middle).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
+                if new, !chosen {
+                    Text("Nueva").font(.caption2.weight(.semibold)).padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color(nsColor: .systemBlue), in: Capsule())
+                }
                 if chosen { Image(systemName: "checkmark").foregroundStyle(Color(nsColor: .systemBlue)) }
             }
             .padding(.horizontal, 10).padding(.vertical, 7)

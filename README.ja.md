@@ -83,6 +83,8 @@ saguru
   <img src="assets/giroscopio.gif" alt="複数の画像と、アプリに見せる映像を回転・傾けるジャイロ" width="820">
 </p>
 
+ツールを開いたままカメラ、iPhone、Android 端末を接続すると、自動的に一覧に現れて「新規」と表示されます。Android 側で USB デバッグの許可がまだなら、Saguru がその場で知らせます。
+
 <p align="center">
   <img src="assets/camara.gif" alt="シミュレータ上のアプリがカメラを受け取り、QR を読み取り、写真を撮る" width="820">
 </p>

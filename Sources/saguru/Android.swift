@@ -37,14 +37,15 @@ enum ADB {
         return String(data: data, encoding: .utf8)
     }
 
-    /// Phones connected with USB debugging accepted: serial and model.
-    static func phones() -> [(serial: String, name: String)] {
+    /// Phones adb sees: serial, model, and whether they can be used yet. A phone that has not accepted this
+    /// Mac for USB debugging is listed too, so the user can be told what is missing.
+    static func phones() -> [(serial: String, name: String, ready: Bool, state: String)] {
         guard let text = output(["devices", "-l"]) else { return [] }
         return text.split(separator: "\n").dropFirst().compactMap { line in
             let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
-            guard parts.count >= 2, parts[1] == "device" else { return nil }
+            guard parts.count >= 2, ["device", "unauthorized", "offline", "authorizing"].contains(parts[1]) else { return nil }
             let model = parts.first { $0.hasPrefix("model:") }?.dropFirst(6).replacingOccurrences(of: "_", with: " ")
-            return (parts[0], model ?? parts[0])
+            return (parts[0], model ?? (parts[1] == "device" ? parts[0] : "Android"), parts[1] == "device", parts[1])
         }
     }
 }

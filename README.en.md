@@ -83,6 +83,8 @@ Prepare one case per picture (an ID, something that is not one, a cropped one) a
   <img src="assets/giroscopio.gif" alt="Several pictures and a gyroscope to rotate and tilt what the app sees" width="820">
 </p>
 
+Plug in a camera, an iPhone or an Android phone while the tool is open and it shows up in the list by itself, marked as new; if the Android phone still has to accept USB debugging, Saguru says so right there.
+
 <p align="center">
   <img src="assets/camara.gif" alt="The app in the simulator receives a camera, reads a QR code and takes a photo" width="820">
 </p>
