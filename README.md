@@ -68,7 +68,8 @@ HTTP, con autocompletado de códigos de estado y cabeceras, y se aplica en la si
 
 Elige una imagen, la cámara de tu Mac, un iPhone o un Android por USB, y tu app la ve como si fuera su cámara: visor
 en vivo, fotogramas para Vision y OCR, lectura de QR, foto, cámara frontal y trasera, y la pantalla de cámara del
-sistema. Cambiar de fuente no requiere relanzar la app.
+sistema. Cambiar de fuente no requiere relanzar la app. Saguru encuadra la imagen al tamaño que pide tu app, rellenando el cuadro o
+mostrándola completa.
 
 <p align="center">
   <img src="assets/camara.gif" alt="La app del simulador recibe una cámara, lee un QR y toma una foto" width="820">
@@ -171,6 +172,10 @@ salvo el de cámara si eliges la de tu Mac como fuente.
 
 Saguru prefiere decir lo que no hace. Lo mismo aparece dentro de cada herramienta donde importa.
 
+**¿Tu app choca con alguno de estos límites, o encontraste uno que no está en la lista?**
+[Abre un issue](https://github.com/fsaldivar-dev/saguru/issues/new) y cuéntanos qué app o qué API usa y qué esperabas; si es de cámara, pega las líneas
+`Saguru camera:` del registro. Con eso decidimos qué ampliar primero.
+
 <details>
 <summary>Ver la lista completa</summary>
 
@@ -204,9 +209,17 @@ Saguru prefiere decir lo que no hace. Lo mismo aparece dentro de cada herramient
   guardan como mucho 8 MB. Las subidas por archivo o stream largo no se han probado.
 - La cámara cubre las apps que la manejan con `AVCaptureSession` (cámara trasera y frontal, que muestran la misma
   fuente) y `UIImagePickerController` con la cámara como origen, cuya pantalla se sustituye por una sencilla con la
-  imagen en vivo, disparador y cancelar. No están cubiertos el escáner de documentos de VisionKit ni `DataScanner`:
-  una app que abra el escáner de documentos con la cámara activa se cierra. El aviso de códigos de iOS
-  (`AVCaptureMetadataOutput`) solo entrega QR. No hay video grabado, zoom, linterna, enfoque ni profundidad. Un
+  imagen en vivo, disparador y cancelar. Los fotogramas llegan como en un teléfono: en el tamaño del preset de la
+  sesión (4K se entrega a 1080p), acostados salvo que la app gire la conexión, en el formato de píxel que pida (YUV
+  por defecto) y con la frontal espejada en el visor. No están cubiertos el escáner de documentos de VisionKit ni
+  `DataScanner`: una app que abra el escáner de documentos con la cámara activa se cierra. El aviso de códigos de
+  iOS (`AVCaptureMetadataOutput`) solo entrega QR. No hay video grabado ni profundidad; zoom, linterna, enfoque y
+  exposición se aceptan y se recuerdan, pero no cambian la imagen. Los cambios de enfoque o exposición no se
+  notifican a quien los observe. Se ha probado con apps de prueba y con un flujo real de captura de
+  identificaciones, usando una credencial ficticia; no con todas las formas de usar la cámara.
+- La cámara simulada responde con «nada» (nil, cero) a cualquier método de `AVCaptureDevice` y compañía que no
+  tenga respuesta propia, en vez de cerrar la app, y lo anota una vez en el registro de la app:
+  `Saguru camera: -[AVCaptureDevice …] has no stand-in`. Si tu app se comporta raro con la cámara, busca esas líneas. Un
   Android como fuente necesita `adb`, depuración USB y Android 12 o posterior; usa su cámara trasera. El video lo
   entrega el servidor de scrcpy, que va incluido en Saguru (`vendor/scrcpy`, licencia Apache 2.0). La app solo recibe
   la cámara si Saguru la lanzó.

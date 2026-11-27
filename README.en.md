@@ -139,11 +139,13 @@ With several simulators booted you must pick one with `-d "iPhone 17"` (name or 
 Saguru would rather say what it does not do. The full list is in the [Spanish README](README.md#límites-conocidos); the main ones:
 
 - **Network:** only what goes through `URLSession` (including Alamofire and the like). No gRPC, WebSockets, `WKWebView` or raw sockets. A mock matches a method and a URL, ignoring the query.
-- **Camera:** covers `AVCaptureSession` and `UIImagePickerController`. Apple's document scanner (VisionKit) and `DataScanner` are not covered, and an app that opens the document scanner with the camera active crashes. iOS's own code detection only delivers QR. No recorded video, zoom, torch or focus.
+- **Camera:** covers `AVCaptureSession` and `UIImagePickerController`. Frames arrive as on a phone: in the session preset's size (4K is delivered as 1080p), lying on their side unless the app rotates the connection, in the pixel format it asks for, with the front camera mirrored in the preview. Apple's document scanner (VisionKit) and `DataScanner` are not covered, and an app that opens the document scanner with the camera active crashes. iOS's own code detection only delivers QR. No recorded video; zoom, torch and focus are accepted but do not change the picture. Any camera method without an answer of its own returns nothing instead of crashing, and is logged once as `Saguru camera: … has no stand-in`.
 - **Android as a source:** needs `adb`, USB debugging and Android 12 or later; back camera only.
 - **Vision in the simulator:** barcodes, text, rectangles and documents work. Face landmarks, people and image classification have no version that runs in the simulator.
 - **Launch:** the app only gets the network monitor and the camera if Saguru launched it. Launch it from Xcode and you have to ask again.
 - **Permissions:** the design tools need the macOS Accessibility permission.
+
+**Does your app hit one of these limits, or did you find one that is not listed?** [Open an issue](https://github.com/fsaldivar-dev/saguru/issues/new) and tell us which app or API it uses and what you expected; for the camera, paste the `Saguru camera:` lines from the app's log. That is how we decide what to extend first.
 
 ## License
 

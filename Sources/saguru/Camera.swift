@@ -57,10 +57,11 @@ struct CameraDevice: Identifiable, Hashable {
 
 final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     enum Source: Hashable { case image, device(String), android(String) }
-    enum Framing: String, CaseIterable { case portrait = "Vertical", original = "Original" }
+    /// How the picture fills the frame the app asked for: cut to cover it, or shown whole with black around.
+    enum Framing: String, CaseIterable { case fill = "Rellenar", fit = "Completa" }
 
     @Published var source = Source.image { didSet { if source != oldValue { restart() } } }
-    @Published var framing = Framing.portrait { didSet { if framing != oldValue { renderImage() } } }
+    @Published var framing = Framing.fill { didSet { if framing != oldValue { renderImage() } } }
     /// Quarter turns to the right, for sources that arrive lying on their side.
     @Published var turns = 0 { didSet { if turns != oldValue { renderImage() } } }
     @Published var devices: [CameraDevice] = []
@@ -79,11 +80,28 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
     private let context = CIContext()
     private var frames = 0
     private var still: CIImage?
+    /// The frame size the app's camera session asked for, as the agent reports it (a phone held upright).
+    private var want = (width: 1080, height: 1920)
+    private var wantTimer: Timer?
 
     init(panel: PanelModel) {
         self.panel = panel
         super.init()
         if let saved = UserDefaults.standard.string(forKey: "camera.image") { imageURL = URL(fileURLWithPath: saved) }
+        wantTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in self?.readWant() }
+    }
+
+    /// The agent writes the size down when the app starts its session or changes its preset.
+    private func readWant() {
+        guard active != nil, let folder = channel?.folder else { return }
+        queue.async {
+            guard let text = try? String(contentsOf: folder.appendingPathComponent("want"), encoding: .utf8) else { return }
+            let parts = text.split(separator: " ").compactMap { Int($0) }
+            guard parts.count == 2, parts[0] > 0, parts[1] > 0, parts[0] <= FrameChannel.maxSide, parts[1] <= FrameChannel.maxSide,
+                  (parts[0], parts[1]) != self.want else { return }
+            self.want = (parts[0], parts[1])
+            DispatchQueue.main.async { self.renderImage() }
+        }
     }
 
     private var key: String? {
@@ -258,16 +276,14 @@ final class CameraModel: NSObject, ObservableObject, AVCaptureVideoDataOutputSam
         let orientations: [CGImagePropertyOrientation] = [.up, .right, .down, .left]
         if turns % 4 != 0 { picture = picture.oriented(orientations[turns % 4]) }
         picture = picture.transformed(by: CGAffineTransform(translationX: -picture.extent.minX, y: -picture.extent.minY))
-        if framing == .portrait, picture.extent.width > picture.extent.height {
-            // A phone is held upright: keep the middle of a landscape picture, three wide by four tall.
-            let width = (picture.extent.height * 3 / 4).rounded()
-            picture = picture.cropped(to: CGRect(x: ((picture.extent.width - width) / 2).rounded(), y: 0, width: width, height: picture.extent.height))
-            picture = picture.transformed(by: CGAffineTransform(translationX: -picture.extent.minX, y: 0))
-        }
-        let scale = min(1, 1440 / max(picture.extent.width, picture.extent.height))
-        if scale < 1 { picture = picture.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) }
-        let width = Int(picture.extent.width) & ~1, height = Int(picture.extent.height) & ~1
+        // The agent would cut the picture to the app's frame anyway; doing it here shows the user what the app gets.
+        let width = want.width & ~1, height = want.height & ~1
         let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        let across = CGFloat(width) / picture.extent.width, down = CGFloat(height) / picture.extent.height
+        let scale = framing == .fill ? max(across, down) : min(across, down)
+        picture = picture.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        picture = picture.transformed(by: CGAffineTransform(translationX: ((CGFloat(width) - picture.extent.width) / 2).rounded(), y: ((CGFloat(height) - picture.extent.height) / 2).rounded()))
+        picture = picture.composited(over: CIImage(color: .black)).cropped(to: bounds)
         channel?.write(width: width, height: height) { memory, row in
             context.render(picture, toBitmap: memory, rowBytes: row, bounds: bounds, format: .BGRA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB))
         }
@@ -404,7 +420,8 @@ struct CameraForm: View {
 
     private static let works = [
         "Visor y fotogramas en vivo",
-        "Foto, con cámara trasera y frontal",
+        "Foto, con cámara trasera y frontal (la frontal, espejada en el visor)",
+        "Tamaño del preset, giro y espejo de cada conexión",
         "Lectura de QR",
         "Pantalla de cámara del sistema (UIImagePickerController)",
         "Vision: códigos, texto, rectángulos y documentos",
@@ -413,8 +430,8 @@ struct CameraForm: View {
         "Escáner de documentos de Apple y DataScanner: la app se cierra",
         "Otros códigos de barras por el aviso de iOS (solo QR)",
         "Vision: puntos de la cara, personas y clasificación",
-        "Video grabado, zoom, linterna y enfoque",
-        "Frontal espejada o con una fuente distinta de la trasera",
+        "Video grabado; zoom, linterna y enfoque se aceptan pero no cambian la imagen",
+        "La frontal muestra la misma fuente que la trasera",
         "Android: solo cámara trasera, Android 12 o posterior",
     ]
 

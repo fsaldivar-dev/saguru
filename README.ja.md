@@ -139,11 +139,13 @@ saguru query com.example.app "SELECT * FROM ZUSER LIMIT 10" --db default.store
 Saguru は、できないことをはっきり伝えることを選びます。完全な一覧は[スペイン語の README](README.md#límites-conocidos) にあります。主なものは次のとおりです。
 
 - **ネットワーク：**`URLSession` を通るものだけが対象です（Alamofire なども含む）。gRPC、WebSocket、`WKWebView`、独自ソケットは見えません。モックはメソッドと URL で一致させ、クエリは見ません。
-- **カメラ：**`AVCaptureSession` と `UIImagePickerController` に対応します。Apple の書類スキャナ（VisionKit）と `DataScanner` には対応しておらず、カメラが有効な状態で書類スキャナを開くとアプリが落ちます。iOS 標準のコード検出が返すのは QR だけです。動画の録画、ズーム、ライト、フォーカスはありません。
+- **カメラ：**`AVCaptureSession` と `UIImagePickerController` に対応します。フレームは実機と同じ形で届きます。セッションの preset のサイズ（4K は 1080p で提供）、アプリが接続を回転させない限り横向き、アプリが指定したピクセル形式で、フロントカメラはプレビューで鏡像になります。Apple の書類スキャナ（VisionKit）と `DataScanner` には対応しておらず、カメラが有効な状態で書類スキャナを開くとアプリが落ちます。iOS 標準のコード検出が返すのは QR だけです。動画の録画はできません。ズーム、ライト、フォーカスは設定できますが、映像は変わりません。個別に実装していないカメラのメソッドは、アプリを落とす代わりに空の値を返し、ログに一度だけ `Saguru camera: … has no stand-in` と記録します。
 - **Android をソースにする場合：**`adb`、USB デバッグ、Android 12 以降が必要です。背面カメラのみ。
 - **シミュレータ上の Vision：**バーコード、テキスト、矩形、書類は動きます。顔のランドマーク、人物、画像分類は、シミュレータで動くバージョンがありません。
 - **起動：**ネットワークの監視とカメラが使えるのは、Saguru が起動したアプリだけです。Xcode から起動した場合は、もう一度有効にする必要があります。
 - **権限：**デザインツールには macOS のアクセシビリティ権限が必要です。
+
+**あなたのアプリがこれらの制限に当たった、または一覧にない問題を見つけた場合は、**[issue を作成](https://github.com/fsaldivar-dev/saguru/issues/new)して、使っている API と期待した動作を教えてください。カメラの場合は、アプリのログにある `Saguru camera:` の行も貼ってください。それをもとに、次に何を拡張するかを決めます。
 
 ## ライセンス
 

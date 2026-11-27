@@ -139,11 +139,13 @@ saguru query com.example.app "SELECT * FROM ZUSER LIMIT 10" --db default.store
 Saguru 宁愿明确说出它做不到的事。完整列表见[西班牙语 README](README.md#límites-conocidos)，主要包括：
 
 - **网络：**只能看到经过 `URLSession` 的请求（包括 Alamofire 等）。不支持 gRPC、WebSocket、`WKWebView` 和原始套接字。Mock 按方法和 URL 匹配，忽略查询参数。
-- **相机：**支持 `AVCaptureSession` 和 `UIImagePickerController`。不支持 Apple 的文档扫描器（VisionKit）和 `DataScanner`；在相机启用时打开文档扫描器会导致应用崩溃。iOS 自带的码识别只返回二维码。不支持录像、变焦、手电筒和对焦。
+- **相机：**支持 `AVCaptureSession` 和 `UIImagePickerController`。画面帧与真机一致：按会话 preset 的尺寸提供（4K 以 1080p 提供），除非应用旋转连接否则为横向，使用应用请求的像素格式，前置摄像头在预览中镜像显示。不支持 Apple 的文档扫描器（VisionKit）和 `DataScanner`；在相机启用时打开文档扫描器会导致应用崩溃。iOS 自带的码识别只返回二维码。不支持录像；变焦、手电筒和对焦可以设置，但不会改变画面。没有专门实现的相机方法会返回空值而不是让应用崩溃，并在日志中记录一次 `Saguru camera: … has no stand-in`。
 - **以 Android 作为来源：**需要 `adb`、USB 调试以及 Android 12 或更高版本；仅支持后置摄像头。
 - **模拟器中的 Vision：**条码、文字、矩形和文档可用。人脸特征点、人体和图像分类没有能在模拟器中运行的版本。
 - **启动：**只有由 Saguru 启动的应用才能使用网络监视和相机。从 Xcode 启动后需要重新开启。
 - **权限：**设计工具需要 macOS 的辅助功能权限。
+
+**你的应用碰到了这些限制，或者发现了列表之外的问题？**请[提交 issue](https://github.com/fsaldivar-dev/saguru/issues/new)，告诉我们应用使用了哪个 API、你期望的结果是什么；如果与相机有关，请附上应用日志中以 `Saguru camera:` 开头的行。我们据此决定优先扩展什么。
 
 ## 许可证
 
