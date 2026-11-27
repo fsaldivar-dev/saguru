@@ -269,3 +269,11 @@ Saguru prefiere decir lo que no hace. Lo mismo aparece dentro de cada herramient
 
 [MIT](LICENSE). Incluye el servidor de [scrcpy](https://github.com/Genymobile/scrcpy), con licencia Apache 2.0
 (`vendor/scrcpy`), para usar un Android como cámara.
+
+**Marcas.** Saguru es un proyecto independiente: no está afiliado a Apple ni a Google, ni cuenta con su respaldo.
+iPhone, iOS, Xcode y Mac son marcas de Apple Inc.; Android y Pixel son marcas de Google LLC. Se nombran solo para
+describir con qué funciona Saguru. La credencial que aparece en las demostraciones es inventada.
+
+**Tus datos.** Saguru no envía nada a ningún servidor. El monitor de red guarda en la carpeta temporal de tu Mac lo
+que captura (cabeceras y cuerpos, con los tokens que lleven), y los mocks en `~/Library/Application Support/Saguru`.
+Bórralos si compartes el equipo.

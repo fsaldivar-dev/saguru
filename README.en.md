@@ -175,3 +175,7 @@ Saguru would rather say what it does not do. The full list is in the [Spanish RE
 ## License
 
 [MIT](LICENSE). Includes the [scrcpy](https://github.com/Genymobile/scrcpy) server, under the Apache 2.0 license (`vendor/scrcpy`), to use an Android phone as a camera.
+
+**Trademarks.** Saguru is an independent project: it is not affiliated with, or endorsed by, Apple or Google. iPhone, iOS, Xcode and Mac are trademarks of Apple Inc.; Android and Pixel are trademarks of Google LLC. They are named only to describe what Saguru works with. The ID card in the demos is made up.
+
+**Your data.** Saguru sends nothing to any server. The network monitor keeps what it captures (headers and bodies, with any tokens in them) in your Mac's temporary folder, and mocks in `~/Library/Application Support/Saguru`. Delete them if you share the machine.

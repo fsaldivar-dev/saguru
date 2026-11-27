@@ -175,3 +175,7 @@ Saguru は、できないことをはっきり伝えることを選びます。�
 ## ライセンス
 
 [MIT](LICENSE)。Android 端末をカメラとして使うために、[scrcpy](https://github.com/Genymobile/scrcpy) のサーバ（Apache 2.0 ライセンス、`vendor/scrcpy`）を同梱しています。
+
+**商標について。**Saguru は独立したプロジェクトであり、Apple および Google とは提携しておらず、その承認も受けていません。iPhone、iOS、Xcode、Mac は Apple Inc. の商標、Android と Pixel は Google LLC の商標です。Saguru が何と連携するかを説明するためにのみ記載しています。デモに登場する身分証は架空のものです。
+
+**データについて。**Saguru はどのサーバーにも何も送信しません。ネットワークモニタは取得した内容（ヘッダと本文、そこに含まれるトークンも）を Mac の一時フォルダに、モックを `~/Library/Application Support/Saguru` に保存します。マシンを共有する場合は削除してください。

@@ -175,3 +175,7 @@ Saguru 宁愿明确说出它做不到的事。完整列表见[西班牙语 READM
 ## 许可证
 
 [MIT](LICENSE)。其中包含 [scrcpy](https://github.com/Genymobile/scrcpy) 的服务端（Apache 2.0 许可证，位于 `vendor/scrcpy`），用于把 Android 手机作为相机。
+
+**商标。**Saguru 是独立项目，与 Apple 和 Google 没有关联，也未获得其认可。iPhone、iOS、Xcode 和 Mac 是 Apple Inc. 的商标；Android 和 Pixel 是 Google LLC 的商标。提及这些名称只是为了说明 Saguru 可以配合什么使用。演示中出现的证件是虚构的。
+
+**你的数据。**Saguru 不会向任何服务器发送数据。网络监视器把捕获的内容（请求头和正文，包括其中的令牌）保存在 Mac 的临时文件夹中，Mock 保存在 `~/Library/Application Support/Saguru`。如果与他人共用电脑，请记得删除。

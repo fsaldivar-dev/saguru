@@ -75,7 +75,7 @@ func mark(_ context: CGContext, origin: CGPoint, side: CGFloat) {
 }
 
 let arguments = CommandLine.arguments
-guard arguments.count >= 2 else { print("uso: make-icon.swift icono.png [banner.png]"); exit(1) }
+guard arguments.count >= 2 else { print("uso: make-icon.swift icono.png [banner.png [lema [funciones [familia tipográfica]]]]"); exit(1) }
 
 let icon = bitmap(1024, 1024) { context in mark(context, origin: CGPoint(x: 100, y: 100), side: 824) }
 try icon.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: arguments[1]))
@@ -86,13 +86,17 @@ if arguments.count >= 3 {
         let glow = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [color(0x3D8BFF, 0.22), color(0x3D8BFF, 0)] as CFArray, locations: nil)!
         context.drawRadialGradient(glow, startCenter: CGPoint(x: 330, y: 240), startRadius: 0, endCenter: CGPoint(x: 330, y: 240), endRadius: 520, options: [])
         mark(context, origin: CGPoint(x: 150, y: 80), side: 320)
-        let title = NSFont.systemFont(ofSize: 132, weight: .bold)
-        let rounded = title.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: 132) } ?? title
-        ("Saguru" as NSString).draw(at: CGPoint(x: 540, y: 216), withAttributes: [.font: rounded, .foregroundColor: NSColor.white, .kern: -2])
-        ((arguments.count > 3 ? arguments[3] : "Superpoderes para el Simulador de iOS") as NSString).draw(at: CGPoint(x: 546, y: 150), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 44, weight: .medium), .foregroundColor: NSColor(white: 1, alpha: 0.72)])
-        ((arguments.count > 4 ? arguments[4] : "Red · Cámara · Push · Permisos · Datos · Diseño") as NSString).draw(at: CGPoint(x: 548, y: 92), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 30, weight: .regular), .foregroundColor: NSColor(red: 0.44, green: 0.84, blue: 1, alpha: 0.95)])
+        // Avenir Next for Latin text and Hiragino for Chinese and Japanese: fonts that ship with macOS for
+        // making documents. The system font (San Francisco) is licensed for interface mock-ups only.
+        let family = arguments.count > 5 ? arguments[5] : "Avenir Next"
+        func face(_ family: String, _ weight: Int, _ size: CGFloat) -> NSFont {
+            NSFontManager.shared.font(withFamily: family, traits: [], weight: weight, size: size) ?? NSFont(name: "Helvetica", size: size)!
+        }
+        ("Saguru" as NSString).draw(at: CGPoint(x: 540, y: 196), withAttributes: [.font: face("Avenir Next", 9, 132), .foregroundColor: NSColor.white, .kern: -2])
+        ((arguments.count > 3 ? arguments[3] : "Superpoderes para el Simulador de iOS") as NSString).draw(at: CGPoint(x: 546, y: 140), withAttributes: [
+            .font: face(family, 6, 44), .foregroundColor: NSColor(white: 1, alpha: 0.72)])
+        ((arguments.count > 4 ? arguments[4] : "Red · Cámara · Push · Permisos · Datos · Diseño") as NSString).draw(at: CGPoint(x: 548, y: 84), withAttributes: [
+            .font: face(family, 5, 30), .foregroundColor: NSColor(red: 0.44, green: 0.84, blue: 1, alpha: 0.95)])
     }
     try banner.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: arguments[2]))
 }
