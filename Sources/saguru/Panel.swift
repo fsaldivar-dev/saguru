@@ -49,6 +49,8 @@ final class PanelController: NSObject, NSApplicationDelegate {
         /// Bottom-left origin (what AppKit uses).
         let frame: CGRect
         var platform: Platform = .ios
+        /// For an Android window: an emulator, as opposed to a mirror of a phone.
+        var emulator = false
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -127,8 +129,8 @@ final class PanelController: NSObject, NSApplicationDelegate {
                 model.knowsWindowDevice = !window.title.isEmpty || SimulatorAX.trusted
             }
         } else if window != sim, window.number != sim?.number {
-            // A new Android window: look again for the phone or emulator behind it.
-            model.android.reload()
+            // A new Android window: point the tool at the phone or emulator that window shows.
+            model.android.focus(onWindow: window.title, emulator: window.emulator)
         }
         if window != sim {
             if window.topLeft.size != sim?.topLeft.size { screenOffset = nil }
@@ -308,12 +310,13 @@ final class PanelController: NSObject, NSApplicationDelegate {
         if !toast.isVisible { toast.orderFrontRegardless() }
     }
 
-    /// The window a given app's owner name belongs to, if Saguru can hang off it: the iOS Simulator, an
-    /// Android emulator, or a mirror of an Android phone.
-    private static func platform(forOwner owner: String) -> Platform? {
-        if owner == "Simulator" { return .ios }
-        // Android Studio's emulator (qemu-backed), and the mirrors we know: Mirroru and scrcpy.
-        if owner.contains("qemu") || owner == "Emulator" || owner == "Mirroru" || owner == "scrcpy" { return .android }
+    /// What a window owner belongs to, if Saguru can hang off it. Matched by the process name, which macOS
+    /// always gives; a window's title it only gives with Screen Recording, so nothing here depends on it.
+    /// `emulator` tells an Android emulator from a phone's mirror.
+    private static func platform(owner: String) -> (Platform, emulator: Bool)? {
+        if owner == "Simulator" { return (.ios, false) }
+        if owner == "Mirroru" || owner == "scrcpy" { return (.android, false) }
+        if owner.contains("qemu") || owner == "Emulator" { return (.android, true) }
         return nil
     }
 
@@ -328,14 +331,13 @@ final class PanelController: NSObject, NSApplicationDelegate {
             let number = window[kCGWindowNumber as String] as? Int ?? 0
             let owner = window[kCGWindowOwnerName as String] as? String ?? ""
             let title = window[kCGWindowName as String] as? String ?? ""
-            // An Android emulator's title says "Android Emulator"; a plain window of the same process is not it.
-            let emulatorTitle = owner == "Emulator" || owner.contains("qemu")
-            if let found = platform(forOwner: owner), !(emulatorTitle && !title.isEmpty && !title.contains("Emulator")),
+            // h > 200 and w > 150 keep it to a device screen: the emulator's thin side toolbar is dropped.
+            if let found = platform(owner: owner),
                let bounds = window[kCGWindowBounds as String] as? [String: CGFloat],
-               let w = bounds["Width"], let h = bounds["Height"], let x = bounds["X"], let y = bounds["Y"], h > 200,
+               let w = bounds["Width"], let h = bounds["Height"], let x = bounds["X"], let y = bounds["Y"], h > 200, w > 150,
                NSScreen.screens.contains(where: { $0.frame.intersects(CGRect(x: x, y: primaryHeight - y - h, width: w, height: h)) }) {
                 let sim = SimWindow(number: number, title: title, topLeft: CGRect(x: x, y: y, width: w, height: h),
-                                    frame: CGRect(x: x, y: primaryHeight - y - h, width: w, height: h), platform: found)
+                                    frame: CGRect(x: x, y: primaryHeight - y - h, width: w, height: h), platform: found.0, emulator: found.emulator)
                 return (sim, above)
             }
             if own.contains(number) { above.insert(number) }

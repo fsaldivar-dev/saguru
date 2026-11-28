@@ -132,6 +132,39 @@ final class AndroidModel: ObservableObject {
         }
     }
 
+    /// The panel hangs off a particular Android window: point the tool at that device. `emulator` says the
+    /// window is an emulator (so an "emulator-…" serial), otherwise a phone's mirror. The title, when macOS
+    /// gives it (only with Screen Recording), refines the choice when several of the same kind are connected.
+    func focus(onWindow title: String, emulator: Bool) {
+        queue.async {
+            let devices = ADB.devices()
+            var pick: String?
+            // The emulator's title, if available, is "Android Emulator - <avd>:<port>".
+            if emulator, let colon = title.lastIndex(of: ":") {
+                let port = String(title[title.index(after: colon)...].prefix { $0.isNumber })
+                if !port.isEmpty, devices.contains(where: { $0.serial == "emulator-\(port)" }) { pick = "emulator-\(port)" }
+            }
+            // A phone's mirror names the device in its title.
+            if pick == nil, !emulator, !title.isEmpty {
+                pick = devices.first { !$0.serial.hasPrefix("emulator-") && !$0.name.isEmpty && title.localizedCaseInsensitiveContains($0.name) }?.serial
+            }
+            // No title to go by: the kind alone picks it, as long as only one of that kind is connected.
+            if pick == nil {
+                let ofKind = devices.filter { $0.serial.hasPrefix("emulator-") == emulator }
+                pick = ofKind.first { $0.ready }?.serial ?? ofKind.first?.serial
+            }
+            DispatchQueue.main.async {
+                self.devices = devices
+                if let pick, devices.contains(where: { $0.serial == pick }) {
+                    if self.serial != pick { self.serial = pick }
+                } else if self.serial == nil || !devices.contains(where: { $0.serial == self.serial }) {
+                    self.serial = devices.first { $0.ready }?.serial ?? devices.first?.serial
+                }
+                self.problem = self.device?.ready == false ? tr("Acepta «Permitir depuración USB» en el teléfono.") : nil
+            }
+        }
+    }
+
     /// Looks again for devices and, for the chosen one, its apps. Safe to call often.
     func reload() {
         if ADB.path == nil { problem = tr("No se encontró adb. Instala Android platform-tools."); return }
